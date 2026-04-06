@@ -883,7 +883,11 @@ elif menu == "🔐 Administration":
                 if c_del.button("🗑️", key=f"am_del_{u['id']}"):
                     secure_delete_dialog("adherents", u['id'], f"{u['prenom']} {u['nom']}", current_code)
 
-        with t6:  # 📍 LIEUX / HORAIRES
+         with t6:  # 📍 LIEUX / HORAIRES
+            # Chargement des données depuis Supabase
+            l_raw = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data
+            h_raw = supabase.table("horaires").select("*").eq("est_actif", True).execute().data
+
             cl1, cl2 = st.columns(2)
             with cl1:
                 st.subheader("Lieux")
