@@ -37,7 +37,7 @@ check_access()
 
 # --- TITRE DE L'APPLICATION ---
 st.markdown("""
-    <div style="display: flex; align-items: center; background-color: #cfe9ff; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 2px solid #1b5e20;">
+    <div style="display: flex; align-items: center; background-color: #e6f4ff; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 1px solid #a8cfe8;">
         <div style="font-size: 3.5rem; margin-right: 20px;">🎨</div>
         <div>
             <h1 style="color: #1b5e20; margin: 0;">Résa GDF</h1>
@@ -68,9 +68,9 @@ st.markdown("""
     .stButton button:hover { background-color: #0a3d0a !important; }
     .badge-verrouille { background-color: #1b5e20; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p { color: #1b5e20 !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { background-color: #d4e6f1; border-radius: 8px; padding: 8px 16px; color: #1b5e20; }
-    .stTabs [aria-selected="true"] { background-color: #1b5e20 !important; color: white !important; }
+    .stTabs [data-baseweb="tab-list"] { gap: 6px; }
+    .stTabs [data-baseweb="tab"] { background-color: #e6f4ff; border-radius: 20px !important; padding: 6px 18px; color: #1b5e20; border: 1px solid #a8cfe8 !important; font-size: 0.9rem; }
+    .stTabs [aria-selected="true"] { background-color: #1b5e20 !important; color: white !important; border-color: #1b5e20 !important; }
     .stAlert { background-color: #cfe9ff; border-left-color: #1b5e20; color: #1b5e20; }
     .stSuccess { background-color: #d0e8d0; color: #0a3d0a; }
     .stError { background-color: #ffdddd; color: #c62828; }
