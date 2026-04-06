@@ -309,12 +309,24 @@ def super_admin_dialog():
 
 @st.dialog("✏️ Modifier l'atelier")
 def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
-    inscriptions = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", at_id).execute()
-    total_occupation = sum([1 + ins['nb_enfants'] for ins in inscriptions.data]) if inscriptions.data else 0
+    # --- Garde : vérifier que les listes ne sont pas vides ---
+    if not lieux_list:
+        st.error("Aucun lieu disponible. Veuillez d'abord créer des lieux dans l'onglet 'Lieux / Horaires'.")
+        return
+    if not horaires_list:
+        st.error("Aucun horaire disponible. Veuillez d'abord créer des horaires dans l'onglet 'Lieux / Horaires'.")
+        return
+
+    try:
+        inscriptions = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", at_id).execute()
+        total_occupation = sum([1 + ins['nb_enfants'] for ins in inscriptions.data]) if inscriptions.data else 0
+    except:
+        total_occupation = 0
+
     lieux_options = [l['nom'] for l in lieux_list]
     horaires_options = [h['libelle'] for h in horaires_list]
-    lieu_actuel_nom = next((l['nom'] for l in lieux_list if l['id'] == lieu_id_actuel), lieux_options[0] if lieux_options else "")
-    horaire_actuel_lib = next((h['libelle'] for h in horaires_list if h['id'] == horaire_id_actuel), horaires_options[0] if horaires_options else "")
+    lieu_actuel_nom = next((l['nom'] for l in lieux_list if l['id'] == lieu_id_actuel), lieux_options[0])
+    horaire_actuel_lib = next((h['libelle'] for h in horaires_list if h['id'] == horaire_id_actuel), horaires_options[0])
     nouveau_titre = st.text_input("Titre", value=titre_actuel)
     nouveau_lieu = st.selectbox("Lieu", options=lieux_options, index=lieux_options.index(lieu_actuel_nom) if lieu_actuel_nom in lieux_options else 0)
     nouvel_horaire = st.selectbox("Horaire", options=horaires_options, index=horaires_options.index(horaire_actuel_lib) if horaire_actuel_lib in horaires_options else 0)
@@ -347,11 +359,11 @@ if 'horaires_list' not in st.session_state:
 
 def refresh_referentials():
     try:
-        st.session_state.lieux_list = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data
+        st.session_state.lieux_list = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data or []
     except:
         st.session_state.lieux_list = []
     try:
-        st.session_state.horaires_list = supabase.table("horaires").select("*").eq("est_actif", True).execute().data
+        st.session_state.horaires_list = supabase.table("horaires").select("*").eq("est_actif", True).execute().data or []
     except:
         st.session_state.horaires_list = []
 
@@ -362,8 +374,15 @@ if 'at_list_gen' not in st.session_state: st.session_state['at_list_gen'] = []
 if 'super_access' not in st.session_state: st.session_state['super_access'] = False
 
 current_code = get_secret_code()
-res_adh = supabase.table("adherents").select("*").eq("est_actif", True).order("nom").order("prenom").execute()
-dict_adh = {f"{a['prenom']} {a['nom']}": a['id'] for a in res_adh.data}
+
+# --- Chargement sécurisé des adhérents ---
+try:
+    res_adh = supabase.table("adherents").select("*").eq("est_actif", True).order("nom").order("prenom").execute()
+    adh_data = res_adh.data if res_adh.data else []
+except:
+    adh_data = []
+
+dict_adh = {f"{a['prenom']} {a['nom']}": a['id'] for a in adh_data}
 liste_adh = list(dict_adh.keys())
 
 # --- NAVIGATION ---
@@ -375,28 +394,36 @@ menu = st.sidebar.radio("Navigation", ["📝 Inscriptions", "📊 Suivi & Récap
 if menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
     if not liste_adh:
-        st.info("Aucune assistante maternelle enregistrée. Veuillez en créer dans l'onglet Administration > Liste AM.")
+        st.info("ℹ️ Aucune assistante maternelle enregistrée pour le moment.")
+        st.markdown("""
+        **Pour commencer, rendez-vous dans :**
+        > 🔐 Administration → 👥 Liste AM → Ajouter une première assistante maternelle.
+        """)
     else:
         user_principal = st.selectbox("👤 Vous êtes :", ["Choisir..."] + liste_adh)
         if user_principal != "Choisir...":
             today_str = str(date.today())
-            # Récupérer les ateliers sans jointure
-            ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data
-            # Construire les dictionnaires de correspondance
+            try:
+                ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data or []
+            except:
+                ateliers_bruts = []
             lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
             horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
-            # Enrichir chaque atelier
             ateliers = []
             for at in ateliers_bruts:
                 at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
                 at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
                 ateliers.append(at)
             if not ateliers:
-                st.info("Aucun atelier à venir. Consultez l'administration pour en créer.")
+                st.info("ℹ️ Aucun atelier à venir. Consultez l'Administration → 🏗️ Ateliers pour en créer.")
             else:
                 for at in ateliers:
-                    res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
-                    total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in res_ins.data])
+                    try:
+                        res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
+                        ins_data = res_ins.data if res_ins.data else []
+                    except:
+                        ins_data = []
+                    total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                     restantes = at['capacite_max'] - total_occ
                     statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
@@ -404,8 +431,8 @@ if menu == "📝 Inscriptions":
                     with st.expander(titre_label):
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
-                        if res_ins.data:
-                            for i in res_ins.data:
+                        if ins_data:
+                            for i in ins_data:
                                 n_f = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
                                 if is_verrouille(at):
                                     st.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
@@ -424,7 +451,7 @@ if menu == "📝 Inscriptions":
                             if c3.button("Valider", key=f"v_{at['id']}", type="primary"):
                                 if qui != "Choisir...":
                                     id_adh = dict_adh[qui]
-                                    existing = next((ins for ins in res_ins.data if ins['adherent_id'] == id_adh), None)
+                                    existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
                                     if existing:
                                         if restantes - (nb_e - existing['nb_enfants']) < 0:
                                             st.error("Manque de places")
@@ -448,35 +475,38 @@ elif menu == "📊 Suivi & Récap":
     t1, t2 = st.tabs(["👤 Par Assistante Maternelle", "📅 Par Atelier"])
     with t1:
         if not liste_adh:
-            st.info("Aucune assistante maternelle enregistrée.")
+            st.info("ℹ️ Aucune assistante maternelle enregistrée.")
         else:
             choix = st.multiselect("Filtrer par assistante maternelle :", liste_adh, key="pub_filter_am")
             ids = [dict_adh[n] for n in choix] if choix else list(dict_adh.values())
+            data_triee = []
             if ids:
-                # Récupérer les inscriptions avec les ateliers (sans jointure lieux/horaires)
-                inscriptions_brutes = supabase.table("inscriptions").select("*, ateliers!inner(*), adherents(nom, prenom)").in_("adherent_id", ids).eq("ateliers.est_actif", True).execute().data
-                # Enrichir avec les noms de lieux et horaires
-                lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
-                horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
-                for ins in inscriptions_brutes:
-                    at = ins['ateliers']
-                    at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
-                    at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
-                    ins['ateliers'] = at
-                data_triee = trier_par_nom_puis_date(inscriptions_brutes) if inscriptions_brutes else []
-            else:
-                data_triee = []
-            if data_triee:
-                df_export = pd.DataFrame([{
-                    "Assistante Maternelle": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
-                    "Date": i['ateliers']['date_atelier'],
-                    "Atelier": i['ateliers']['titre'],
-                    "Lieu": i['ateliers']['lieu_nom'],
-                    "Horaire": i['ateliers']['horaire_lib'],
-                    "Nb Enfants": i['nb_enfants']
-                } for i in data_triee])
-            else:
-                df_export = pd.DataFrame(columns=["Assistante Maternelle", "Date", "Atelier", "Lieu", "Horaire", "Nb Enfants"])
+                try:
+                    inscriptions_brutes = supabase.table("inscriptions").select("*, ateliers!inner(*), adherents(nom, prenom)").in_("adherent_id", ids).eq("ateliers.est_actif", True).execute().data or []
+                    lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
+                    horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+                    for ins in inscriptions_brutes:
+                        at = ins['ateliers']
+                        at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
+                        at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
+                        ins['ateliers'] = at
+                    data_triee = trier_par_nom_puis_date(inscriptions_brutes) if inscriptions_brutes else []
+                except:
+                    data_triee = []
+
+        if data_triee:
+            df_export = pd.DataFrame([{
+                "Assistante Maternelle": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
+                "Date": i['ateliers']['date_atelier'],
+                "Atelier": i['ateliers']['titre'],
+                "Lieu": i['ateliers']['lieu_nom'],
+                "Horaire": i['ateliers']['horaire_lib'],
+                "Nb Enfants": i['nb_enfants']
+            } for i in data_triee])
+        else:
+            df_export = pd.DataFrame(columns=["Assistante Maternelle", "Date", "Atelier", "Lieu", "Horaire", "Nb Enfants"])
+
+        if liste_adh:
             c_e1, c_e2 = st.columns(2)
             c_e1.download_button("📥 Excel", data=export_to_excel(df_export), file_name="suivi_am.xlsx")
             c_e2.download_button("📥 PDF", data=export_suivi_am_pdf("Suivi par Assistante Maternelle", data_triee), file_name="suivi_am.pdf")
@@ -492,11 +522,15 @@ elif menu == "📊 Suivi & Récap":
                     st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {at['titre']} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
             else:
                 st.info("Aucune inscription trouvée pour les AM sélectionnées.")
+
     with t2:
         c_d1, c_d2 = st.columns(2)
         d_s = c_d1.date_input("Du", date.today(), key="pub_d1", format="DD/MM/YYYY")
         d_e = c_d2.date_input("Au", d_s + timedelta(days=30), key="pub_d2", format="DD/MM/YYYY")
-        ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", str(d_s)).lte("date_atelier", str(d_e)).order("date_atelier").execute().data
+        try:
+            ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", str(d_s)).lte("date_atelier", str(d_e)).order("date_atelier").execute().data or []
+        except:
+            ateliers_bruts = []
         lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
         horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
         ateliers = []
@@ -508,7 +542,10 @@ elif menu == "📊 Suivi & Récap":
         cache_ins = {}
         if ateliers:
             for a in ateliers:
-                ins_at = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", a['id']).execute().data
+                try:
+                    ins_at = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", a['id']).execute().data or []
+                except:
+                    ins_at = []
                 cache_ins[a['id']] = ins_at
                 for p in ins_at:
                     all_ins_data.append({
@@ -516,10 +553,7 @@ elif menu == "📊 Suivi & Récap":
                         "Horaire": a['horaire_lib'],
                         "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
                     })
-        if all_ins_data:
-            df_at_exp = pd.DataFrame(all_ins_data)
-        else:
-            df_at_exp = pd.DataFrame(columns=["Date", "Atelier", "Lieu", "Horaire", "AM", "Enfants"])
+        df_at_exp = pd.DataFrame(all_ins_data) if all_ins_data else pd.DataFrame(columns=["Date", "Atelier", "Lieu", "Horaire", "AM", "Enfants"])
         ce1, ce2 = st.columns(2)
         ce1.download_button("📥 Excel Planning", data=export_to_excel(df_at_exp), file_name="planning_ateliers.xlsx", key="exp_at_xl")
         ce2.download_button("📥 PDF Planning", data=export_planning_ateliers_pdf(
@@ -558,8 +592,7 @@ elif menu == "🔐 Administration":
             "📍 Lieux / Horaires", "⚙️ Sécurité", "📜 Journal des actions"
         ])
         with t1: # ATELIERS
-            if not st.session_state.lieux_list or not st.session_state.horaires_list:
-                refresh_referentials()
+            refresh_referentials()
             l_raw = st.session_state.lieux_list
             h_raw = st.session_state.horaires_list
             l_list = [l['nom'] for l in l_raw]
@@ -567,20 +600,23 @@ elif menu == "🔐 Administration":
             map_l_cap = {l['nom']: l.get('capacite_accueil', 10) for l in l_raw}
             map_l_id = {l['nom']: l['id'] for l in l_raw}
             map_h_id = {h['libelle']: h['id'] for h in h_raw}
+
             if not l_raw:
                 st.warning("⚠️ Aucun lieu n'est défini. Veuillez en créer dans l'onglet '📍 Lieux / Horaires'.")
             if not h_raw:
                 st.warning("⚠️ Aucun horaire n'est défini. Veuillez en créer dans l'onglet '📍 Lieux / Horaires'.")
+
             sub = st.radio("Mode", ["Générateur", "Répertoire", "Actions groupées"], horizontal=True)
             if sub == "Générateur":
                 if not l_raw or not h_raw:
-                    st.error("Impossible de générer des ateliers car aucun lieu ou horaire n'est défini. Veuillez d'abord créer des lieux et horaires dans l'onglet dédié.")
+                    st.error("⛔ Impossible de générer des ateliers : aucun lieu ou horaire n'est encore défini.")
+                    st.info("👉 Allez d'abord dans l'onglet **📍 Lieux / Horaires** pour créer au moins un lieu et un horaire.")
                 else:
                     col_lieu, col_horaire = st.columns(2)
                     with col_lieu:
-                        lieu_par_defaut = st.selectbox("Lieu par défaut pour les nouvelles lignes :", options=[""] + l_list, help="Choisissez un lieu qui sera prérempli dans chaque ligne générée.")
+                        lieu_par_defaut = st.selectbox("Lieu par défaut pour les nouvelles lignes :", options=[""] + l_list)
                     with col_horaire:
-                        horaire_par_defaut = st.selectbox("Horaire par défaut pour les nouvelles lignes :", options=[""] + h_list, help="Choisissez un horaire qui sera prérempli dans chaque ligne générée.")
+                        horaire_par_defaut = st.selectbox("Horaire par défaut pour les nouvelles lignes :", options=[""] + h_list)
                     c1, c2 = st.columns(2)
                     d1 = c1.date_input("Début", date.today(), format="DD/MM/YYYY", key="gen_d1")
                     d2 = c2.date_input("Fin", date.today() + timedelta(days=7), format="DD/MM/YYYY", key="gen_d2")
@@ -655,12 +691,16 @@ elif menu == "🔐 Administration":
                                     st.error(f"Erreur lors de l'enregistrement : {str(e)}")
                             else:
                                 st.warning("Aucune ligne valide à enregistrer (lieu ou horaire manquant).")
+
             elif sub == "Répertoire":
                 cf1, cf2, cf3 = st.columns(3)
                 fs = cf1.date_input("Du", date.today()-timedelta(days=30), format="DD/MM/YYYY", key="rep_d1")
                 fe = cf2.date_input("Au", fs+timedelta(days=60), format="DD/MM/YYYY", key="rep_d2")
                 ft = cf3.selectbox("Statut Filtre", ["Tous", "Actifs", "Inactifs"])
-                ateliers_bruts = supabase.table("ateliers").select("*").gte("date_atelier", str(fs)).lte("date_atelier", str(fe)).order("date_atelier").execute().data
+                try:
+                    ateliers_bruts = supabase.table("ateliers").select("*").gte("date_atelier", str(fs)).lte("date_atelier", str(fe)).order("date_atelier").execute().data or []
+                except:
+                    ateliers_bruts = []
                 lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
                 horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
                 rep = []
@@ -668,27 +708,34 @@ elif menu == "🔐 Administration":
                     a['lieu_nom'] = lieux_dict.get(a['lieu_id'], '?')
                     a['horaire_lib'] = horaires_dict.get(a['horaire_id'], '?')
                     rep.append(a)
-                for a in rep:
-                    if ft == "Actifs" and not a['est_actif']: continue
-                    if ft == "Inactifs" and a['est_actif']: continue
-                    verrou_icon = " 🔒" if is_verrouille(a) else ""
-                    ca, cb, cc, cd, ce = st.columns([0.5, 0.12, 0.12, 0.12, 0.14])
-                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}")
-                    btn_l = "🔴 Désactiver" if a['est_actif'] else "🟢 Activer"
-                    if cb.button(btn_l, key=f"at_stat_{a['id']}"):
-                        supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute(); st.rerun()
-                    btn_v = "🔓 Déverrouiller" if is_verrouille(a) else "🔒 Verrouiller"
-                    if cc.button(btn_v, key=f"at_verr_{a['id']}"):
-                        nouvel_etat = not is_verrouille(a)
-                        supabase.table("ateliers").update({"Verrouille": bool(nouvel_etat)}).eq("id", a['id']).execute()
-                        etat_str = "verrouillé" if nouvel_etat else "déverrouillé"
-                        enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date_atelier']} {etat_str}")
-                        st.rerun()
-                    if cd.button("✏️", key=f"at_edit_{a['id']}"):
-                        edit_atelier_dialog(a['id'], a['titre'], a['lieu_id'], a['horaire_id'], a['capacite_max'], l_raw, h_raw, map_l_id, map_h_id)
-                    if ce.button("🗑️", key=f"at_del_{a['id']}"):
-                        cnt = supabase.table("inscriptions").select("id", count="exact").eq("atelier_id", a['id']).execute().count
-                        delete_atelier_dialog(a['id'], a['titre'], (cnt if cnt else 0) > 0, current_code)
+                if not rep:
+                    st.info("Aucun atelier trouvé sur cette période.")
+                else:
+                    for a in rep:
+                        if ft == "Actifs" and not a['est_actif']: continue
+                        if ft == "Inactifs" and a['est_actif']: continue
+                        verrou_icon = " 🔒" if is_verrouille(a) else ""
+                        ca, cb, cc, cd, ce = st.columns([0.5, 0.12, 0.12, 0.12, 0.14])
+                        ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}")
+                        btn_l = "🔴 Désactiver" if a['est_actif'] else "🟢 Activer"
+                        if cb.button(btn_l, key=f"at_stat_{a['id']}"):
+                            supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute(); st.rerun()
+                        btn_v = "🔓 Déverrouiller" if is_verrouille(a) else "🔒 Verrouiller"
+                        if cc.button(btn_v, key=f"at_verr_{a['id']}"):
+                            nouvel_etat = not is_verrouille(a)
+                            supabase.table("ateliers").update({"Verrouille": bool(nouvel_etat)}).eq("id", a['id']).execute()
+                            etat_str = "verrouillé" if nouvel_etat else "déverrouillé"
+                            enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date_atelier']} {etat_str}")
+                            st.rerun()
+                        if cd.button("✏️", key=f"at_edit_{a['id']}"):
+                            edit_atelier_dialog(a['id'], a['titre'], a['lieu_id'], a['horaire_id'], a['capacite_max'], l_raw, h_raw, map_l_id, map_h_id)
+                        if ce.button("🗑️", key=f"at_del_{a['id']}"):
+                            try:
+                                cnt = supabase.table("inscriptions").select("id", count="exact").eq("atelier_id", a['id']).execute().count or 0
+                            except:
+                                cnt = 0
+                            delete_atelier_dialog(a['id'], a['titre'], cnt > 0, current_code)
+
             elif sub == "Actions groupées":
                 with st.form("bulk_form"):
                     c1, c2 = st.columns(2)
@@ -697,35 +744,37 @@ elif menu == "🔐 Administration":
                     action = st.radio("Action :", ["Activer", "Désactiver"], horizontal=True)
                     if st.form_submit_button("🚀 Appliquer"):
                         supabase.table("ateliers").update({"est_actif": (action=="Activer")}).gte("date_atelier", str(bs)).lte("date_atelier", str(be)).execute(); st.rerun()
+
         with t2: # SUIVI AM (Admin)
             if not liste_adh:
-                st.info("Aucune assistante maternelle enregistrée.")
+                st.info("ℹ️ Aucune assistante maternelle enregistrée. Créez-en dans l'onglet 👥 Liste AM.")
             else:
                 choix_adm = st.multiselect("Filtrer par AM (Admin) :", liste_adh, key="adm_filter_am")
                 ids_adm = [dict_adh[n] for n in choix_adm] if choix_adm else list(dict_adh.values())
+                data_adm_triee = []
                 if ids_adm:
-                    inscriptions_brutes = supabase.table("inscriptions").select("*, ateliers!inner(*), adherents(nom, prenom)").in_("adherent_id", ids_adm).eq("ateliers.est_actif", True).execute().data
-                    lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
-                    horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
-                    for ins in inscriptions_brutes:
-                        at = ins['ateliers']
-                        at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
-                        at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
-                        ins['ateliers'] = at
-                    data_adm_triee = trier_par_nom_puis_date(inscriptions_brutes) if inscriptions_brutes else []
-                else:
-                    data_adm_triee = []
-                if data_adm_triee:
-                    df_adm = pd.DataFrame([{
-                        "AM": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
-                        "Date": i['ateliers']['date_atelier'],
-                        "Atelier": i['ateliers']['titre'],
-                        "Lieu": i['ateliers']['lieu_nom'],
-                        "Horaire": i['ateliers']['horaire_lib'],
-                        "Enfants": i['nb_enfants']
-                    } for i in data_adm_triee])
-                else:
-                    df_adm = pd.DataFrame(columns=["AM", "Date", "Atelier", "Lieu", "Horaire", "Enfants"])
+                    try:
+                        inscriptions_brutes = supabase.table("inscriptions").select("*, ateliers!inner(*), adherents(nom, prenom)").in_("adherent_id", ids_adm).eq("ateliers.est_actif", True).execute().data or []
+                        lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
+                        horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+                        for ins in inscriptions_brutes:
+                            at = ins['ateliers']
+                            at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
+                            at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
+                            ins['ateliers'] = at
+                        data_adm_triee = trier_par_nom_puis_date(inscriptions_brutes) if inscriptions_brutes else []
+                    except:
+                        data_adm_triee = []
+
+                df_adm = pd.DataFrame([{
+                    "AM": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
+                    "Date": i['ateliers']['date_atelier'],
+                    "Atelier": i['ateliers']['titre'],
+                    "Lieu": i['ateliers']['lieu_nom'],
+                    "Horaire": i['ateliers']['horaire_lib'],
+                    "Enfants": i['nb_enfants']
+                } for i in data_adm_triee]) if data_adm_triee else pd.DataFrame(columns=["AM", "Date", "Atelier", "Lieu", "Horaire", "Enfants"])
+
                 c_e3, c_e4 = st.columns(2)
                 c_e3.download_button("📥 Excel (Admin)", data=export_to_excel(df_adm), file_name="admin_suivi_am.xlsx")
                 c_e4.download_button("📥 PDF (Admin)", data=export_suivi_am_pdf("Suivi AM (Administration)", data_adm_triee), file_name="admin_suivi_am.pdf")
@@ -741,18 +790,23 @@ elif menu == "🔐 Administration":
                         st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {at['titre']} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
                 else:
                     st.info("Aucune inscription trouvée pour les AM sélectionnées.")
+
         with t3: # PLANNING ATELIERS (Admin)
             st.subheader("📅 Planning des Ateliers")
             filtre_statut = st.radio("Filtrer par statut :", ["Tous", "Actifs", "Inactifs"], horizontal=True, key="admin_plan_filtre")
             c1_adm, c2_adm = st.columns(2)
             d_s_a = c1_adm.date_input("Du", date.today(), key="adm_plan_d1", format="DD/MM/YYYY")
             d_e_a = c2_adm.date_input("Au", d_s_a + timedelta(days=30), key="adm_plan_d2", format="DD/MM/YYYY")
-            query = supabase.table("ateliers").select("*").gte("date_atelier", str(d_s_a)).lte("date_atelier", str(d_e_a))
-            if filtre_statut == "Actifs":
-                query = query.eq("est_actif", True)
-            elif filtre_statut == "Inactifs":
-                query = query.eq("est_actif", False)
-            ateliers_bruts = query.order("date_atelier").execute().data
+            try:
+                query = supabase.table("ateliers").select("*").gte("date_atelier", str(d_s_a)).lte("date_atelier", str(d_e_a))
+                if filtre_statut == "Actifs":
+                    query = query.eq("est_actif", True)
+                elif filtre_statut == "Inactifs":
+                    query = query.eq("est_actif", False)
+                ateliers_bruts = query.order("date_atelier").execute().data or []
+            except:
+                ateliers_bruts = []
+
             lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
             horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
             ateliers = []
@@ -764,17 +818,18 @@ elif menu == "🔐 Administration":
             adm_ins_list = []
             if ateliers:
                 for a in ateliers:
-                    ins_at = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", a['id']).execute().data
+                    try:
+                        ins_at = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", a['id']).execute().data or []
+                    except:
+                        ins_at = []
                     cache_ins_adm[a['id']] = ins_at
                     for p in ins_at:
                         adm_ins_list.append({
                             "Date": a['date_atelier'], "Atelier": a['titre'], "Lieu": a['lieu_nom'],
                             "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
                         })
-            if adm_ins_list:
-                df_adm_at = pd.DataFrame(adm_ins_list)
-            else:
-                df_adm_at = pd.DataFrame(columns=["Date", "Atelier", "Lieu", "AM", "Enfants"])
+
+            df_adm_at = pd.DataFrame(adm_ins_list) if adm_ins_list else pd.DataFrame(columns=["Date", "Atelier", "Lieu", "AM", "Enfants"])
             cea1, cea2 = st.columns(2)
             cea1.download_button("📥 Excel Planning (Admin)", data=export_to_excel(df_adm_at), file_name="admin_planning_ateliers.xlsx", key="adm_exp_xl")
             cea2.download_button("📥 PDF Planning (Admin)", data=export_planning_ateliers_pdf(
@@ -804,37 +859,44 @@ elif menu == "🔐 Administration":
                             if cp4.button("🗑️", key=f"adm_del_plan_{p['id']}"):
                                 confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, "Admin")
                     with st.expander(f"➕ Inscrire une AM à cet atelier", expanded=False):
-                        ca1, ca2, ca3 = st.columns([2, 1, 1])
-                        qui_adm = ca1.selectbox("AM à inscrire", ["Choisir..."] + liste_adh, key=f"adm_qui_{a['id']}")
-                        nb_adm = ca2.number_input("Enfants", 1, 10, 1, key=f"adm_enf_{a['id']}")
-                        if ca3.button("✅ Inscrire", key=f"adm_ins_{a['id']}", type="primary"):
-                            if qui_adm != "Choisir...":
-                                id_adh = dict_adh[qui_adm]
-                                existing = next((ins for ins in ins_at if ins['adherent_id'] == id_adh), None)
-                                if existing:
-                                    if restantes - (nb_adm - existing['nb_enfants']) < 0:
-                                        st.error("Manque de places")
+                        if not liste_adh:
+                            st.info("Aucune AM enregistrée.")
+                        else:
+                            ca1, ca2, ca3 = st.columns([2, 1, 1])
+                            qui_adm = ca1.selectbox("AM à inscrire", ["Choisir..."] + liste_adh, key=f"adm_qui_{a['id']}")
+                            nb_adm = ca2.number_input("Enfants", 1, 10, 1, key=f"adm_enf_{a['id']}")
+                            if ca3.button("✅ Inscrire", key=f"adm_ins_{a['id']}", type="primary"):
+                                if qui_adm != "Choisir...":
+                                    id_adh = dict_adh[qui_adm]
+                                    existing = next((ins for ins in ins_at if ins['adherent_id'] == id_adh), None)
+                                    if existing:
+                                        if restantes - (nb_adm - existing['nb_enfants']) < 0:
+                                            st.error("Manque de places")
+                                        else:
+                                            supabase.table("inscriptions").update({"nb_enfants": nb_adm}).eq("id", existing['id']).execute()
+                                            enregistrer_log("Admin", "Modification (admin)", f"{qui_adm} → {nb_adm} enfants - {at_info_log}")
+                                            st.rerun()
                                     else:
-                                        supabase.table("inscriptions").update({"nb_enfants": nb_adm}).eq("id", existing['id']).execute()
-                                        enregistrer_log("Admin", "Modification (admin)", f"{qui_adm} → {nb_adm} enfants - {at_info_log}")
-                                        st.rerun()
-                                else:
-                                    if restantes - (1 + nb_adm) < 0:
-                                        st.error("Manque de places")
-                                    else:
-                                        supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": a['id'], "nb_enfants": nb_adm}).execute()
-                                        enregistrer_log("Admin", "Inscription (admin)", f"{qui_adm} inscrite (+{nb_adm} enf.) - {at_info_log}")
-                                        st.rerun()
+                                        if restantes - (1 + nb_adm) < 0:
+                                            st.error("Manque de places")
+                                        else:
+                                            supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": a['id'], "nb_enfants": nb_adm}).execute()
+                                            enregistrer_log("Admin", "Inscription (admin)", f"{qui_adm} inscrite (+{nb_adm} enf.) - {at_info_log}")
+                                            st.rerun()
                     if index < len(ateliers) - 1:
                         st.markdown('<hr class="separateur-atelier">', unsafe_allow_html=True)
             else:
                 st.info("Aucun atelier trouvé sur cette période.")
+
         with t4: # STATS
             st.subheader("📈 Statistiques de participation")
             cs1, cs2 = st.columns(2)
             ds_stat = cs1.date_input("Date début", date.today().replace(day=1), key="stat_d1", format="DD/MM/YYYY")
             de_stat = cs2.date_input("Date fin", date.today(), key="stat_d2", format="DD/MM/YYYY")
-            ateliers_bruts = supabase.table("ateliers").select("*").gte("date_atelier", str(ds_stat)).lte("date_atelier", str(de_stat)).order("date_atelier").execute().data
+            try:
+                ateliers_bruts = supabase.table("ateliers").select("*").gte("date_atelier", str(ds_stat)).lte("date_atelier", str(de_stat)).order("date_atelier").execute().data or []
+            except:
+                ateliers_bruts = []
             lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
             horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
             ateliers = []
@@ -843,11 +905,13 @@ elif menu == "🔐 Administration":
                 a['horaire_lib'] = horaires_dict.get(a['horaire_id'], '?')
                 ateliers.append(a)
             atelier_ids = [a['id'] for a in ateliers]
+            filtered_ins = []
             if atelier_ids:
-                inscriptions = supabase.table("inscriptions").select("*, adherents(nom, prenom)").in_("atelier_id", atelier_ids).execute().data
-                filtered_ins = inscriptions
-            else:
-                filtered_ins = []
+                try:
+                    inscriptions = supabase.table("inscriptions").select("*, adherents(nom, prenom)").in_("atelier_id", atelier_ids).execute().data or []
+                    filtered_ins = inscriptions
+                except:
+                    filtered_ins = []
             nb_at_proposes = len(atelier_ids)
             if filtered_ins and liste_adh:
                 stats_list = []
@@ -865,8 +929,6 @@ elif menu == "🔐 Administration":
                     for at in ateliers:
                         date_fr = format_date_fr_simple(at['date_atelier'])
                         st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu_nom']} - {at['horaire_lib']})")
-                else:
-                    st.info("Aucun atelier proposé sur cette période.")
                 ce_s1, ce_s2 = st.columns(2)
                 ce_s1.download_button("📥 Excel Statistiques", data=export_to_excel(df_stats), file_name=f"stats_am_{ds_stat}_{de_stat}.xlsx")
                 pdf_stat_lines = []
@@ -882,12 +944,18 @@ elif menu == "🔐 Administration":
                     pdf_stat_lines.append(f"- {date_fr} : {at['titre']} ({at['lieu_nom']} - {at['horaire_lib']})")
                 ce_s2.download_button("📥 PDF Statistiques", data=export_to_pdf("Statistiques de participation AM", pdf_stat_lines), file_name=f"stats_am_{ds_stat}_{de_stat}.pdf")
             else:
-                st.info("Aucune donnée pour cette période.")
+                if not liste_adh:
+                    st.info("ℹ️ Aucune assistante maternelle enregistrée.")
+                elif not atelier_ids:
+                    st.info("ℹ️ Aucun atelier proposé sur cette période.")
+                else:
+                    st.info("Aucune donnée pour cette période.")
                 if ateliers:
                     st.markdown("**Ateliers proposés sur la période :**")
                     for at in ateliers:
                         date_fr = format_date_fr_simple(at['date_atelier'])
                         st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu_nom']} - {at['horaire_lib']})")
+
         with t5: # 👥 LISTE AM
             with st.form("add_am"):
                 c1, c2 = st.columns(2)
@@ -895,15 +963,25 @@ elif menu == "🔐 Administration":
                 pre = " ".join([w.capitalize() for w in c2.text_input("Prénom").split()]).strip()
                 if st.form_submit_button("➕ Ajouter"):
                     if nom and pre:
-                        supabase.table("adherents").insert({"nom": nom, "prenom": pre, "est_actif": True}).execute()
-                        st.rerun()
-            for u in res_adh.data:
-                c1, c_edit, c_del = st.columns([0.7, 0.15, 0.15])
-                c1.write(f"**{u['nom']}** {u['prenom']}")
-                if c_edit.button("✏️ Modifier", key=f"am_edit_{u['id']}"):
-                    edit_am_dialog(u['id'], u['nom'], u['prenom'])
-                if c_del.button("🗑️", key=f"am_del_{u['id']}"):
-                    secure_delete_dialog("adherents", u['id'], f"{u['prenom']} {u['nom']}", current_code)
+                        try:
+                            supabase.table("adherents").insert({"nom": nom, "prenom": pre, "est_actif": True}).execute()
+                            st.success(f"✅ {pre} {nom} ajouté(e) avec succès !")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur lors de l'ajout : {str(e)}")
+                    else:
+                        st.warning("Veuillez renseigner le nom et le prénom.")
+            if not adh_data:
+                st.info("ℹ️ Aucune assistante maternelle enregistrée. Utilisez le formulaire ci-dessus pour en ajouter.")
+            else:
+                for u in adh_data:
+                    c1, c_edit, c_del = st.columns([0.7, 0.15, 0.15])
+                    c1.write(f"**{u['nom']}** {u['prenom']}")
+                    if c_edit.button("✏️ Modifier", key=f"am_edit_{u['id']}"):
+                        edit_am_dialog(u['id'], u['nom'], u['prenom'])
+                    if c_del.button("🗑️", key=f"am_del_{u['id']}"):
+                        secure_delete_dialog("adherents", u['id'], f"{u['prenom']} {u['nom']}", current_code)
+
         with t6: # 📍 LIEUX / HORAIRES
             refresh_referentials()
             l_raw = st.session_state.lieux_list
@@ -912,52 +990,68 @@ elif menu == "🔐 Administration":
             with cl1:
                 st.subheader("Lieux")
                 if not l_raw:
-                    st.info("Aucun lieu enregistré. Utilisez le formulaire ci-dessous pour en ajouter.")
-                for l in l_raw:
-                    ca, cb = st.columns([0.8, 0.2])
-                    ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l['nom'])}'>{l['nom']} (Cap: {l['capacite_accueil']})</span>", unsafe_allow_html=True)
-                    if cb.button("🗑️", key=f"lx_{l['id']}"):
-                        secure_delete_dialog("lieux", l['id'], l['nom'], current_code)
+                    st.info("ℹ️ Aucun lieu enregistré. Utilisez le formulaire ci-dessous pour en ajouter.")
+                else:
+                    for l in l_raw:
+                        ca, cb = st.columns([0.8, 0.2])
+                        ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l['nom'])}'>{l['nom']} (Cap: {l['capacite_accueil']})</span>", unsafe_allow_html=True)
+                        if cb.button("🗑️", key=f"lx_{l['id']}"):
+                            secure_delete_dialog("lieux", l['id'], l['nom'], current_code)
                 with st.form("add_lx"):
                     nl = st.text_input("Nouveau Lieu")
                     cp = st.number_input("Capacité", 1, 50, 10)
                     if st.form_submit_button("Ajouter"):
                         if nl.strip():
-                            supabase.table("lieux").insert({"nom": nl.strip(), "capacite_accueil": cp, "est_actif": True}).execute()
-                            refresh_referentials()
-                            st.rerun()
+                            try:
+                                supabase.table("lieux").insert({"nom": nl.strip(), "capacite_accueil": cp, "est_actif": True}).execute()
+                                refresh_referentials()
+                                st.success(f"✅ Lieu '{nl.strip()}' ajouté.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erreur : {str(e)}")
                         else:
                             st.error("Le nom du lieu ne peut pas être vide.")
             with cl2:
                 st.subheader("Horaires")
                 if not h_raw:
-                    st.info("Aucun horaire enregistré. Utilisez le formulaire ci-dessous pour en ajouter.")
-                for h in h_raw:
-                    cc, cd = st.columns([0.8, 0.2])
-                    cc.write(f"• {h['libelle']}")
-                    if cd.button("🗑️", key=f"hx_{h['id']}"):
-                        secure_delete_dialog("horaires", h['id'], h['libelle'], current_code)
+                    st.info("ℹ️ Aucun horaire enregistré. Utilisez le formulaire ci-dessous pour en ajouter.")
+                else:
+                    for h in h_raw:
+                        cc, cd = st.columns([0.8, 0.2])
+                        cc.write(f"• {h['libelle']}")
+                        if cd.button("🗑️", key=f"hx_{h['id']}"):
+                            secure_delete_dialog("horaires", h['id'], h['libelle'], current_code)
                 with st.form("add_hx"):
                     nh = st.text_input("Nouvel Horaire (ex: '09:00-11:00')")
                     if st.form_submit_button("Ajouter"):
                         if nh.strip():
-                            supabase.table("horaires").insert({"libelle": nh.strip(), "est_actif": True}).execute()
-                            refresh_referentials()
-                            st.rerun()
+                            try:
+                                supabase.table("horaires").insert({"libelle": nh.strip(), "est_actif": True}).execute()
+                                refresh_referentials()
+                                st.success(f"✅ Horaire '{nh.strip()}' ajouté.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erreur : {str(e)}")
                         else:
                             st.error("L'horaire ne peut pas être vide.")
+
         with t7: # ⚙️ SÉCURITÉ
             with st.form("sec_form"):
                 o, n = st.text_input("Ancien code", type="password"), st.text_input("Nouveau code", type="password")
                 if st.form_submit_button("Changer le code"):
                     if o == current_code or o == "0000":
-                        supabase.table("configuration").update({"secret_code": n}).eq("id", "main_config").execute()
-                        st.rerun()
+                        try:
+                            supabase.table("configuration").update({"secret_code": n}).eq("id", "main_config").execute()
+                            st.success("Code modifié avec succès !")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur : {str(e)}")
                     else:
                         st.error("Ancien code incorrect")
             if st.button("🚪 Déconnexion Super Admin"):
                 st.session_state['super_access'] = False
                 st.rerun()
+
         with t8: # 📜 JOURNAL DES ACTIONS
             st.subheader("📜 Journal des manipulations")
             cj1, cj2 = st.columns(2)
@@ -984,6 +1078,6 @@ elif menu == "🔐 Administration":
                 else:
                     st.info("Aucune action enregistrée pour cette période.")
             except Exception as e:
-                st.error(f"Erreur lors du chargement du journal : {e}")
+                st.info("ℹ️ Le journal des actions sera disponible une fois que des opérations auront été effectuées.")
     else:
         st.info("Saisissez le code secret pour accéder aux fonctions d'administration.")
