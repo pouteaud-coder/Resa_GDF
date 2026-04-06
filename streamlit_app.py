@@ -14,10 +14,8 @@ st.set_page_config(page_title="Résa GDF", page_icon="🌿", layout="wide")
 
 # --- GATEKEEPER : Code d'accès général ---
 def check_access():
-    """Vérifie si l'utilisateur a saisi le bon code d'accès."""
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
-
     if not st.session_state["authenticated"]:
         st.markdown("""
             <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh;">
@@ -40,11 +38,11 @@ check_access()
 
 # --- TITRE DE L'APPLICATION ---
 st.markdown("""
-    <div style="display: flex; align-items: center; background-color: #e6f4ff; padding: 20px; border-radius: 15px; margin-bottom: 25px;">
+    <div style="display: flex; align-items: center; background-color: #cfe9ff; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 2px solid #1b5e20;">
         <div style="font-size: 3.5rem; margin-right: 20px;">🎨</div>
         <div>
-            <h1 style="color: #1b5e20; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 2.8rem;">Résa GDF</h1>
-            <p style="margin: 0; color: #0a3d0a; font-weight: bold; font-size: 1.1rem;">Ateliers d'éveil & Activités manuelles</p>
+            <h1 style="color: #1b5e20; margin: 0;">Résa GDF</h1>
+            <p style="margin: 0; color: #0a3d0a; font-weight: bold;">Ateliers d'éveil & Activités manuelles</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -54,130 +52,38 @@ url = st.secrets["supabase_url"]
 key = st.secrets["supabase_key"]
 supabase: Client = create_client(url, key)
 
-# --- STYLE CSS (nouvelle palette : fond bleu pâle, texte vert foncé) ---
+# --- STYLE CSS (identique à l'original) ---
 st.markdown("""
     <style>
-    /* Couleurs globales */
-    html, body, [class*="st-"] {
-        font-size: 1.05rem !important;
-        background-color: #e6f4ff !important;
-        color: #1b5e20 !important;
-    }
-    .stApp {
-        background-color: #e6f4ff;
-    }
-    .lieu-badge {
-        padding: 3px 10px;
-        border-radius: 6px;
-        color: white;
-        font-weight: bold;
-        font-size: 0.85rem;
-        display: inline-block;
-        margin: 2px 0;
-    }
-    .horaire-text {
-        font-size: 0.9rem;
-        color: #2e7d32;
-        font-weight: 400;
-    }
-    .compteur-badge {
-        font-size: 0.85rem;
-        font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 4px;
-        background-color: #d4e6f1;
-        color: #1b5e20;
-        border: 1px solid #1b5e20;
-        margin-left: 5px;
-    }
-    .alerte-complet {
-        background-color: #c62828 !important;
-        color: white !important;
-        border-color: #b71c1c !important;
-    }
-    .separateur-atelier {
-        border: 0;
-        border-top: 1px solid #b0d4ff;
-        margin: 15px 0;
-    }
-    .container-inscrits {
-        margin-top: -8px;
-        padding-top: 0;
-        margin-bottom: 5px;
-    }
-    .liste-inscrits {
-        font-size: 0.95rem !important;
-        color: #1b5e20;
-        margin-left: 20px;
-        display: block;
-        line-height: 1.1;
-    }
-    .nb-enfants-focus {
-        color: #0a3d0a;
-        font-weight: 600;
-    }
-    .stButton button {
-        border-radius: 8px !important;
-        background-color: #1b5e20 !important;
-        color: white !important;
-        border: none !important;
-    }
-    .stButton button:hover {
-        background-color: #0a3d0a !important;
-    }
-    .badge-verrouille {
-        background-color: #1b5e20;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        font-weight: bold;
-        margin-left: 6px;
-    }
-    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
-        color: #1b5e20 !important;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #d4e6f1;
-        border-radius: 8px;
-        padding: 8px 16px;
-        color: #1b5e20;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #1b5e20 !important;
-        color: white !important;
-    }
-    .stAlert {
-        background-color: #cfe9ff;
-        border-left-color: #1b5e20;
-        color: #1b5e20;
-    }
-    .stSuccess {
-        background-color: #d0e8d0;
-        color: #0a3d0a;
-    }
-    .stError {
-        background-color: #ffdddd;
-        color: #c62828;
-    }
-    input, textarea, select {
-        background-color: #ffffff !important;
-        color: #1b5e20 !important;
-        border-color: #1b5e20 !important;
-    }
-    .css-1d391kg, .css-1lcbmhc {
-        background-color: #cfe9ff !important;
-    }
+    html, body, [class*="st-"] { font-size: 1.05rem !important; background-color: #e6f4ff !important; color: #1b5e20 !important; }
+    .stApp { background-color: #e6f4ff; }
+    .lieu-badge { padding: 3px 10px; border-radius: 6px; color: white; font-weight: bold; font-size: 0.85rem; display: inline-block; margin: 2px 0; }
+    .horaire-text { font-size: 0.9rem; color: #2e7d32; font-weight: 400; }
+    .compteur-badge { font-size: 0.85rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background-color: #d4e6f1; color: #1b5e20; border: 1px solid #1b5e20; margin-left: 5px; }
+    .alerte-complet { background-color: #c62828 !important; color: white !important; border-color: #b71c1c !important; }
+    .separateur-atelier { border: 0; border-top: 1px solid #b0d4ff; margin: 15px 0; }
+    .container-inscrits { margin-top: -8px; padding-top: 0; margin-bottom: 5px; }
+    .liste-inscrits { font-size: 0.95rem !important; color: #1b5e20; margin-left: 20px; display: block; line-height: 1.1; }
+    .nb-enfants-focus { color: #0a3d0a; font-weight: 600; }
+    .stButton button { border-radius: 8px !important; background-color: #1b5e20 !important; color: white !important; border: none !important; }
+    .stButton button:hover { background-color: #0a3d0a !important; }
+    .badge-verrouille { background-color: #1b5e20; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p { color: #1b5e20 !important; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] { background-color: #d4e6f1; border-radius: 8px; padding: 8px 16px; color: #1b5e20; }
+    .stTabs [aria-selected="true"] { background-color: #1b5e20 !important; color: white !important; }
+    .stAlert { background-color: #cfe9ff; border-left-color: #1b5e20; color: #1b5e20; }
+    .stSuccess { background-color: #d0e8d0; color: #0a3d0a; }
+    .stError { background-color: #ffdddd; color: #c62828; }
+    input, textarea, select { background-color: #ffffff !important; color: #1b5e20 !important; border-color: #1b5e20 !important; }
+    .css-1d391kg, .css-1lcbmhc { background-color: #cfe9ff !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FONCTIONS UTILITAIRES ---
+# --- FONCTIONS UTILITAIRES (adaptées) ---
 def get_color(nom_lieu):
-    hash_object = hashlib.md5(str(nom_lieu).upper().strip().encode())
     colors = ["#2e7d32", "#1b5e20", "#0a3d0a", "#1565c0", "#1976d2", "#0d47a1"]
+    hash_object = hashlib.md5(str(nom_lieu).upper().strip().encode())
     hue = int(hash_object.hexdigest()[:6], 16) % len(colors)
     return colors[hue]
 
@@ -193,18 +99,14 @@ def heure_paris_fr():
     mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
             "septembre", "octobre", "novembre", "décembre"]
     now = datetime.now(ZoneInfo("Europe/Paris"))
-    j = jours[now.weekday()]
-    m = mois[now.month - 1]
-    return f"le {j} {now.day} {m} {now.year} à {now.hour:02d}h{now.minute:02d}"
+    return f"le {jours[now.weekday()]} {now.day} {mois[now.month-1]} {now.year} à {now.hour:02d}h{now.minute:02d}"
 
 def enregistrer_log(utilisateur, action, details):
     try:
-        heure_str = heure_paris_fr()
-        details_avec_heure = f"{details} [{heure_str}]"
         supabase.table("logs").insert({
             "utilisateur": utilisateur,
             "action": action,
-            "details": details_avec_heure
+            "details": f"{details} [{heure_paris_fr()}]"
         }).execute()
     except:
         pass
@@ -232,8 +134,7 @@ def parse_date_fr_to_iso(date_str):
     if not clean:
         return None
     try:
-        d = datetime.strptime(clean, '%Y-%m-%d')
-        return d.strftime('%Y-%m-%d')
+        return datetime.strptime(clean, '%Y-%m-%d').strftime('%Y-%m-%d')
     except:
         pass
     parts = clean.split(" ")
@@ -259,16 +160,17 @@ def parse_date_fr_to_iso(date_str):
     return clean
 
 def is_verrouille(at):
-    return bool(at.get("Verrouille", at.get("verrouille", False)))
+    # La colonne s'appelle est_verrouille (boolean)
+    return bool(at.get("est_verrouille", False))
 
 def trier_par_nom_puis_date(data):
     return sorted(data, key=lambda i: (
         i['adherents']['nom'].upper(),
         i['adherents']['prenom'].upper(),
-        i['ateliers']['date_atelier']
+        i['ateliers']['date']  # colonne 'date' au lieu de 'date_atelier'
     ))
 
-# --- FONCTIONS D'EXPORT ---
+# --- FONCTIONS D'EXPORT (adaptées) ---
 def export_to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -303,10 +205,10 @@ def export_suivi_am_pdf(title, data_triee):
     for i in data_triee:
         nom_am = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
         at = i['ateliers']
-        date_fr = format_date_fr_simple(at['date_atelier'])
+        date_fr = format_date_fr_simple(at['date'])  # 'date'
         titre_at = at.get('titre', '')
-        lieu = at['lieux']['nom']
-        horaire = at['horaires']['libelle']
+        lieu = at.get('lieu', '')      # directement le texte
+        horaire = at.get('horaire', '')# directement le texte
         nb_enf = i['nb_enfants']
         if nom_am != curr_am:
             pdf.ln(3)
@@ -317,8 +219,7 @@ def export_suivi_am_pdf(title, data_triee):
             pdf.set_text_color(0, 0, 0)
             curr_am = nom_am
         pdf.set_font("Arial", 'B', 10)
-        ligne_date = f"  {date_fr}".encode('latin-1', 'replace').decode('latin-1')
-        pdf.cell(0, 6, ligne_date, ln=True)
+        pdf.cell(0, 6, f"  {date_fr}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.set_font("Arial", size=10)
         detail = f"     {titre_at}  |  {lieu}  |  {horaire}  |  {nb_enf} enfant(s)"
         pdf.cell(0, 6, detail.encode('latin-1', 'replace').decode('latin-1'), ln=True)
@@ -339,10 +240,10 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn):
         t_ad = len(ins_at)
         t_en = sum([p['nb_enfants'] for p in ins_at])
         restantes = a['capacite_max'] - (t_ad + t_en)
-        date_fr = format_date_fr_simple(a['date_atelier'])
+        date_fr = format_date_fr_simple(a['date'])
         titre_at = a.get('titre', '')
-        lieu = a['lieux']['nom']
-        horaire = a['horaires']['libelle']
+        lieu = a.get('lieu', '')
+        horaire = a.get('horaire', '')
         verrou = " [VERROUILLE]" if is_verrouille(a) else ""
         pdf.set_fill_color(212, 230, 241)
         pdf.set_text_color(0, 0, 0)
@@ -360,7 +261,7 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn):
         pdf.ln(3)
     return pdf.output(dest='S').encode('latin-1')
 
-# --- DIALOGUES ---
+# --- DIALOGUES (inchangés, mais la fonction edit_atelier_dialog sera modifiée plus loin) ---
 @st.dialog("⚠️ Confirmation")
 def secure_delete_dialog(table, item_id, label, current_code):
     st.write(f"Voulez-vous vraiment désactiver/supprimer : **{label}** ?")
@@ -386,7 +287,8 @@ def delete_atelier_dialog(at_id, titre, a_des_inscrits, current_code):
     pw = st.text_input("Code secret admin", type="password")
     if st.button("Confirmer la suppression définitive"):
         if pw == current_code or pw == "0000":
-            if a_des_inscrits: supabase.table("inscriptions").delete().eq("atelier_id", at_id).execute()
+            if a_des_inscrits:
+                supabase.table("inscriptions").delete().eq("atelier_id", at_id).execute()
             supabase.table("ateliers").delete().eq("id", at_id).execute()
             st.rerun()
 
@@ -409,31 +311,30 @@ def super_admin_dialog():
         else: st.error("Code incorrect")
 
 @st.dialog("✏️ Modifier l'atelier")
-def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
+def edit_atelier_dialog(at_id, titre_actuel, lieu_actuel, horaire_actuel, capacite_actuelle, lieux_list, horaires_list):
+    """Dialogue adapté : on modifie directement les champs texte lieu et horaire"""
     inscriptions = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", at_id).execute()
     total_occupation = sum([1 + ins['nb_enfants'] for ins in inscriptions.data]) if inscriptions.data else 0
-    lieux_options = [l['nom'] for l in lieux_list]
-    horaires_options = [h['libelle'] for h in horaires_list]
-    lieu_actuel_nom = next((l['nom'] for l in lieux_list if l['id'] == lieu_id_actuel), lieux_options[0] if lieux_options else "")
-    horaire_actuel_lib = next((h['libelle'] for h in horaires_list if h['id'] == horaire_id_actuel), horaires_options[0] if horaires_options else "")
+
     nouveau_titre = st.text_input("Titre", value=titre_actuel)
-    nouveau_lieu = st.selectbox("Lieu", options=lieux_options, index=lieux_options.index(lieu_actuel_nom) if lieu_actuel_nom in lieux_options else 0)
-    nouvel_horaire = st.selectbox("Horaire", options=horaires_options, index=horaires_options.index(horaire_actuel_lib) if horaire_actuel_lib in horaires_options else 0)
+    # Sélecteurs basés sur les listes de valeurs existantes (noms de lieux et créneaux)
+    nouveau_lieu = st.selectbox("Lieu", options=lieux_list, index=lieux_list.index(lieu_actuel) if lieu_actuel in lieux_list else 0)
+    nouvel_horaire = st.selectbox("Horaire", options=horaires_list, index=horaires_list.index(horaire_actuel) if horaire_actuel in horaires_list else 0)
     nouvelle_capacite = st.number_input("Capacité maximale (places totales)", min_value=1, value=int(capacite_actuelle))
+
     if nouvelle_capacite < total_occupation:
         st.error(f"La capacité ne peut pas être inférieure au nombre actuel d'occupants ({total_occupation} places prises).")
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Annuler", use_container_width=True):
             st.rerun()
     with col2:
         if st.button("Enregistrer", type="primary", use_container_width=True, disabled=(nouvelle_capacite < total_occupation)):
-            nouveau_lieu_id = next(l['id'] for l in lieux_list if l['nom'] == nouveau_lieu)
-            nouvel_horaire_id = next(h['id'] for h in horaires_list if h['libelle'] == nouvel_horaire)
             supabase.table("ateliers").update({
                 "titre": nouveau_titre,
-                "lieu_id": nouveau_lieu_id,
-                "horaire_id": nouvel_horaire_id,
+                "lieu": nouveau_lieu,
+                "horaire": nouvel_horaire,
                 "capacite_max": nouvelle_capacite
             }).eq("id", at_id).execute()
             enregistrer_log("Admin", "Modification atelier", f"Atelier ID {at_id} modifié : titre={nouveau_titre}, lieu={nouveau_lieu}, horaire={nouvel_horaire}, capacité={nouvelle_capacite}")
@@ -461,17 +362,18 @@ if menu == "📝 Inscriptions":
 
     if user_principal != "Choisir...":
         today_str = str(date.today())
-        res_at = supabase.table("ateliers").select("*, lieux(nom, capacite_accueil), horaires(libelle)").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute()
+        # Plus de jointure avec lieux/horaires : les infos sont dans ateliers directement
+        res_at = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date", today_str).order("date").execute()
 
         for at in res_at.data:
             res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
             total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in res_ins.data])
             restantes = at['capacite_max'] - total_occ
             statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
-            at_info_log = f"{at['date_atelier']} | {at['horaires']['libelle']} | {at['lieux']['nom']}"
+            at_info_log = f"{at['date']} | {at['horaire']} | {at['lieu']}"
 
             verrou_badge = " 🔒 <span class='badge-verrouille'>Inscription uniquement par l'admin</span>" if is_verrouille(at) else ""
-            titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieux']['nom']} | ⏰ {at['horaires']['libelle']} | {statut_p}"
+            titre_label = f"{format_date_fr_complete(at['date'])} — {at['titre']} | 📍 {at['lieu']} | ⏰ {at['horaire']} | {statut_p}"
 
             with st.expander(titre_label):
                 if is_verrouille(at):
@@ -501,13 +403,15 @@ if menu == "📝 Inscriptions":
                             id_adh = dict_adh[qui]
                             existing = next((ins for ins in res_ins.data if ins['adherent_id'] == id_adh), None)
                             if existing:
-                                if restantes - (nb_e - existing['nb_enfants']) < 0: st.error("Manque de places")
+                                if restantes - (nb_e - existing['nb_enfants']) < 0:
+                                    st.error("Manque de places")
                                 else:
                                     supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
                                     enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
                                     st.rerun()
                             else:
-                                if restantes - (1 + nb_e) < 0: st.error("Manque de places")
+                                if restantes - (1 + nb_e) < 0:
+                                    st.error("Manque de places")
                                 else:
                                     supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
                                     enregistrer_log(user_principal, "Inscription", f"{qui} s'inscrit (+{nb_e} enf.) - {at_info_log}")
@@ -523,17 +427,18 @@ elif menu == "📊 Suivi & Récap":
     with t1:
         choix = st.multiselect("Filtrer par assistante maternelle :", liste_adh, key="pub_filter_am")
         ids = [dict_adh[n] for n in choix] if choix else list(dict_adh.values())
-        data = supabase.table("inscriptions").select("*, ateliers!inner(*, lieux(nom), horaires(libelle)), adherents(nom, prenom)").in_("adherent_id", ids).eq("ateliers.est_actif", True).execute()
+        # Requête sans jointure lieux/horaires (les colonnes sont dans ateliers)
+        data = supabase.table("inscriptions").select("*, ateliers(*), adherents(nom, prenom)").in_("adherent_id", ids).eq("ateliers.est_actif", True).execute()
 
         data_triee = trier_par_nom_puis_date(data.data) if data.data else []
 
         if data.data:
             df_export = pd.DataFrame([{
                 "Assistante Maternelle": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
-                "Date": i['ateliers']['date_atelier'],
+                "Date": i['ateliers']['date'],
                 "Atelier": i['ateliers']['titre'],
-                "Lieu": i['ateliers']['lieux']['nom'],
-                "Horaire": i['ateliers']['horaires']['libelle'],
+                "Lieu": i['ateliers']['lieu'],
+                "Horaire": i['ateliers']['horaire'],
                 "Nb Enfants": i['nb_enfants']
             } for i in data_triee])
         else:
@@ -551,8 +456,8 @@ elif menu == "📊 Suivi & Récap":
                     st.markdown(f'<div style="color:#1b5e20; border-bottom:2px solid #1b5e20; padding-top:15px; margin-bottom:8px; font-weight:bold; font-size:1.2rem;">{nom_u}</div>', unsafe_allow_html=True)
                     curr_u = nom_u
                 at = i['ateliers']
-                c_l = get_color(at['lieux']['nom'])
-                st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {at['titre']} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieux']['nom']}</span> <span class='horaire-text'>({at['horaires']['libelle']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
+                c_l = get_color(at['lieu'])
+                st.write(f"{format_date_fr_complete(at['date'], gras=True)} — {at['titre']} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu']}</span> <span class='horaire-text'>({at['horaire']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
         else:
             st.info("Aucune inscription trouvée pour les AM sélectionnées.")
 
@@ -560,7 +465,7 @@ elif menu == "📊 Suivi & Récap":
         c_d1, c_d2 = st.columns(2)
         d_s = c_d1.date_input("Du", date.today(), key="pub_d1", format="DD/MM/YYYY")
         d_e = c_d2.date_input("Au", d_s + timedelta(days=30), key="pub_d2", format="DD/MM/YYYY")
-        ats_raw = supabase.table("ateliers").select("*, lieux(nom), horaires(libelle)").eq("est_actif", True).gte("date_atelier", str(d_s)).lte("date_atelier", str(d_e)).order("date_atelier").execute()
+        ats_raw = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date", str(d_s)).lte("date", str(d_e)).order("date").execute()
 
         all_ins_data = []
         cache_ins = {}
@@ -570,9 +475,12 @@ elif menu == "📊 Suivi & Récap":
                 cache_ins[a['id']] = ins_at.data
                 for p in ins_at.data:
                     all_ins_data.append({
-                        "Date": a['date_atelier'], "Atelier": a['titre'], "Lieu": a['lieux']['nom'],
-                        "Horaire": a['horaires']['libelle'],
-                        "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
+                        "Date": a['date'],
+                        "Atelier": a['titre'],
+                        "Lieu": a['lieu'],
+                        "Horaire": a['horaire'],
+                        "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}",
+                        "Enfants": p['nb_enfants']
                     })
 
         if all_ins_data:
@@ -588,18 +496,20 @@ elif menu == "📊 Suivi & Récap":
 
         if ats_raw.data:
             for index, a in enumerate(ats_raw.data):
-                c_l = get_color(a['lieux']['nom'])
+                c_l = get_color(a['lieu'])
                 ins_at = cache_ins.get(a['id'], [])
                 t_ad, t_en = len(ins_at), sum([p['nb_enfants'] for p in ins_at])
                 restantes = a['capacite_max'] - (t_ad + t_en)
                 cl_c = "alerte-complet" if restantes <= 0 else ""
-                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieux']['nom']}</span> | <span class='horaire-text'>{a['horaires']['libelle']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
+                st.markdown(f"**{format_date_fr_complete(a['date'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu']}</span> | <span class='horaire-text'>{a['horaire']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
                 if ins_at:
                     ins_s = sorted(ins_at, key=lambda x: (x['adherents']['nom'], x['adherents']['prenom']))
                     html = "<div class='container-inscrits'>"
-                    for p in ins_s: html += f'<span class="liste-inscrits">• {p["adherents"]["prenom"]} {p["adherents"]["nom"]} <span class="nb-enfants-focus">({p["nb_enfants"]} enfants)</span></span>'
+                    for p in ins_s:
+                        html += f'<span class="liste-inscrits">• {p["adherents"]["prenom"]} {p["adherents"]["nom"]} <span class="nb-enfants-focus">({p["nb_enfants"]} enfants)</span></span>'
                     st.markdown(html + "</div>", unsafe_allow_html=True)
-                if index < len(ats_raw.data) - 1: st.markdown('<hr class="separateur-atelier">', unsafe_allow_html=True)
+                if index < len(ats_raw.data) - 1:
+                    st.markdown('<hr class="separateur-atelier">', unsafe_allow_html=True)
         else:
             st.info("Aucun atelier trouvé sur cette période.")
 
@@ -609,7 +519,8 @@ elif menu == "📊 Suivi & Récap":
 elif menu == "🔐 Administration":
     c_login1, c_login2 = st.columns([0.7, 0.3])
     pw = c_login1.text_input("Code secret admin", type="password")
-    if c_login2.button("🔑 Code Super Admin"): super_admin_dialog()
+    if c_login2.button("🔑 Code Super Admin"):
+        super_admin_dialog()
 
     if pw == current_code or st.session_state['super_access']:
         t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs([
@@ -619,13 +530,14 @@ elif menu == "🔐 Administration":
         ])
 
         with t1:  # ATELIERS
+            # Chargement des lieux et horaires depuis leurs tables (pour les listes déroulantes)
             l_raw = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data
-            h_raw = supabase.table("horaires").select("*").execute().data
+            h_raw = supabase.table("horaires").select("*").eq("est_actif", True).execute().data
             l_list = [l['nom'] for l in l_raw]
-            h_list = [h['libelle'] for h in h_raw]
-            map_l_cap = {l['nom']: l['capacite_accueil'] for l in l_raw}
-            map_l_id = {l['nom']: l['id'] for l in l_raw}
-            map_h_id = {h['libelle']: h['id'] for h in h_raw}
+            h_list = [h['creneau'] for h in h_raw]  # colonne 'creneau'
+            map_l_cap = {l['nom']: l['capacite'] for l in l_raw}  # colonne 'capacite'
+            # Pas de map_l_id ni map_h_id car on stocke le texte directement
+
             sub = st.radio("Mode", ["Générateur", "Répertoire", "Actions groupées"], horizontal=True)
 
             if sub == "Générateur":
@@ -633,11 +545,12 @@ elif menu == "🔐 Administration":
                 with col_lieu:
                     lieu_par_defaut = st.selectbox("Lieu par défaut pour les nouvelles lignes :",
                                                    options=[""] + l_list,
-                                                   help="Choisissez un lieu qui sera prérempli dans chaque ligne générée. Si vide, le champ sera laissé vide.")
+                                                   help="Choisissez un lieu qui sera prérempli dans chaque ligne générée.")
                 with col_horaire:
                     horaire_par_defaut = st.selectbox("Horaire par défaut pour les nouvelles lignes :",
                                                       options=[""] + h_list,
-                                                      help="Choisissez un horaire qui sera prérempli dans chaque ligne générée. Si vide, le champ sera laissé vide.")
+                                                      help="Choisissez un horaire qui sera prérempli dans chaque ligne générée.")
+
                 c1, c2 = st.columns(2)
                 d1 = c1.date_input("Début", date.today(), format="DD/MM/YYYY", key="gen_d1")
                 d2 = c2.date_input("Fin", date.today() + timedelta(days=7), format="DD/MM/YYYY", key="gen_d2")
@@ -681,28 +594,29 @@ elif menu == "🔐 Administration":
                         to_db = []
                         for _, r in df_ed.iterrows():
                             lieu_nom = r['Lieu']
-                            horaire_lib = r['Horaire']
-                            if not lieu_nom or not horaire_lib:
+                            horaire_val = r['Horaire']
+                            if not lieu_nom or not horaire_val:
                                 st.warning(f"Ligne ignorée : lieu ou horaire manquant pour la date {r['Date']}")
                                 continue
-                            if lieu_nom not in map_l_id:
-                                st.error(f"Lieu '{lieu_nom}' introuvable. Annulation.")
+                            # Vérification que le lieu et l'horaire existent dans les référentiels (optionnel)
+                            if lieu_nom not in l_list:
+                                st.error(f"Lieu '{lieu_nom}' introuvable dans la table lieux. Annulation.")
                                 st.stop()
-                            if horaire_lib not in map_h_id:
-                                st.error(f"Horaire '{horaire_lib}' introuvable. Annulation.")
+                            if horaire_val not in h_list:
+                                st.error(f"Horaire '{horaire_val}' introuvable dans la table horaires. Annulation.")
                                 st.stop()
                             date_iso = parse_date_fr_to_iso(r['Date'])
                             if not date_iso:
                                 st.error(f"Format de date invalide : {r['Date']}")
                                 st.stop()
                             to_db.append({
-                                "date_atelier": date_iso,
+                                "date": date_iso,
                                 "titre": r['Titre'],
-                                "lieu_id": map_l_id[lieu_nom],
-                                "horaire_id": map_h_id[horaire_lib],
+                                "lieu": lieu_nom,
+                                "horaire": horaire_val,
                                 "capacite_max": int(r['Capacité']),
                                 "est_actif": bool(r['Actif']),
-                                "Verrouille": bool(r.get("Verrouillé", False))
+                                "est_verrouille": bool(r.get("Verrouillé", False))
                             })
                         if to_db:
                             try:
@@ -713,20 +627,20 @@ elif menu == "🔐 Administration":
                             except Exception as e:
                                 st.error(f"Erreur lors de l'enregistrement : {str(e)}")
                         else:
-                            st.warning("Aucune ligne valide à enregistrer (lieu ou horaire manquant).")
+                            st.warning("Aucune ligne valide à enregistrer.")
 
             elif sub == "Répertoire":
                 cf1, cf2, cf3 = st.columns(3)
                 fs = cf1.date_input("Du", date.today() - timedelta(days=30), format="DD/MM/YYYY", key="rep_d1")
                 fe = cf2.date_input("Au", fs + timedelta(days=60), format="DD/MM/YYYY", key="rep_d2")
                 ft = cf3.selectbox("Statut Filtre", ["Tous", "Actifs", "Inactifs"])
-                rep = supabase.table("ateliers").select("*, lieux(nom), horaires(libelle)").gte("date_atelier", str(fs)).lte("date_atelier", str(fe)).order("date_atelier").execute().data
+                rep = supabase.table("ateliers").select("*").gte("date", str(fs)).lte("date", str(fe)).order("date").execute().data
                 for a in rep:
                     if ft == "Actifs" and not a['est_actif']: continue
                     if ft == "Inactifs" and a['est_actif']: continue
                     verrou_icon = " 🔒" if is_verrouille(a) else ""
                     ca, cb, cc, cd, ce = st.columns([0.5, 0.12, 0.12, 0.12, 0.14])
-                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaires']['libelle']} | {a['titre']} ({a['lieux']['nom']}){verrou_icon}")
+                    ca.write(f"**{format_date_fr_complete(a['date'])}** | {a['horaire']} | {a['titre']} ({a['lieu']}){verrou_icon}")
                     btn_l = "🔴 Désactiver" if a['est_actif'] else "🟢 Activer"
                     if cb.button(btn_l, key=f"at_stat_{a['id']}"):
                         supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute()
@@ -734,12 +648,12 @@ elif menu == "🔐 Administration":
                     btn_v = "🔓 Déverrouiller" if is_verrouille(a) else "🔒 Verrouiller"
                     if cc.button(btn_v, key=f"at_verr_{a['id']}"):
                         nouvel_etat = not is_verrouille(a)
-                        supabase.table("ateliers").update({"Verrouille": bool(nouvel_etat)}).eq("id", a['id']).execute()
+                        supabase.table("ateliers").update({"est_verrouille": bool(nouvel_etat)}).eq("id", a['id']).execute()
                         etat_str = "verrouillé" if nouvel_etat else "déverrouillé"
-                        enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date_atelier']} {etat_str}")
+                        enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date']} {etat_str}")
                         st.rerun()
                     if cd.button("✏️", key=f"at_edit_{a['id']}"):
-                        edit_atelier_dialog(a['id'], a['titre'], a['lieu_id'], a['horaire_id'], a['capacite_max'], l_raw, h_raw, map_l_id, map_h_id)
+                        edit_atelier_dialog(a['id'], a['titre'], a['lieu'], a['horaire'], a['capacite_max'], l_list, h_list)
                     if ce.button("🗑️", key=f"at_del_{a['id']}"):
                         cnt = supabase.table("inscriptions").select("id", count="exact").eq("atelier_id", a['id']).execute().count
                         delete_atelier_dialog(a['id'], a['titre'], (cnt if cnt else 0) > 0, current_code)
@@ -751,29 +665,23 @@ elif menu == "🔐 Administration":
                     be = c2.date_input("Fin", format="DD/MM/YYYY", key="blk_d2")
                     action = st.radio("Action :", ["Activer", "Désactiver"], horizontal=True)
                     if st.form_submit_button("🚀 Appliquer"):
-                        supabase.table("ateliers").update({"est_actif": (action == "Activer")}).gte("date_atelier", str(bs)).lte("date_atelier", str(be)).execute()
+                        supabase.table("ateliers").update({"est_actif": (action == "Activer")}).gte("date", str(bs)).lte("date", str(be)).execute()
                         st.rerun()
 
         with t2:  # SUIVI AM (Admin)
             choix_adm = st.multiselect("Filtrer par AM (Admin) :", liste_adh, key="adm_filter_am")
             ids_adm = [dict_adh[n] for n in choix_adm] if choix_adm else list(dict_adh.values())
-            # Requête corrigée avec indentation correcte
-            data_adm = supabase.table("inscriptions").select(
-                "*, ateliers!inner(*, lieux(nom), horaires(libelle)), adherents(nom, prenom)"
-            ).in_("adherent_id", ids_adm).execute()
-            # Filtrage manuel pour ne garder que les ateliers actifs
-            if data_adm.data:
-                data_adm.data = [row for row in data_adm.data if row['ateliers'].get('est_actif', True)]
+            data_adm = supabase.table("inscriptions").select("*, ateliers(*), adherents(nom, prenom)").in_("adherent_id", ids_adm).eq("ateliers.est_actif", True).execute()
 
             data_adm_triee = trier_par_nom_puis_date(data_adm.data) if data_adm.data else []
 
             if data_adm.data:
                 df_adm = pd.DataFrame([{
                     "AM": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
-                    "Date": i['ateliers']['date_atelier'],
+                    "Date": i['ateliers']['date'],
                     "Atelier": i['ateliers']['titre'],
-                    "Lieu": i['ateliers']['lieux']['nom'],
-                    "Horaire": i['ateliers']['horaires']['libelle'],
+                    "Lieu": i['ateliers']['lieu'],
+                    "Horaire": i['ateliers']['horaire'],
                     "Enfants": i['nb_enfants']
                 } for i in data_adm_triee])
             else:
@@ -791,8 +699,8 @@ elif menu == "🔐 Administration":
                         st.markdown(f'<div style="color:#1b5e20; border-bottom:2px solid #1b5e20; padding-top:15px; margin-bottom:8px; font-weight:bold; font-size:1.2rem;">{nom}</div>', unsafe_allow_html=True)
                         curr = nom
                     at = i['ateliers']
-                    c_l = get_color(at['lieux']['nom'])
-                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {at['titre']} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieux']['nom']}</span> <span class='horaire-text'>({at['horaires']['libelle']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
+                    c_l = get_color(at['lieu'])
+                    st.write(f"{format_date_fr_complete(at['date'], gras=True)} — {at['titre']} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu']}</span> <span class='horaire-text'>({at['horaire']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
             else:
                 st.info("Aucune inscription trouvée pour les AM sélectionnées.")
 
@@ -802,12 +710,12 @@ elif menu == "🔐 Administration":
             c1_adm, c2_adm = st.columns(2)
             d_s_a = c1_adm.date_input("Du", date.today(), key="adm_plan_d1", format="DD/MM/YYYY")
             d_e_a = c2_adm.date_input("Au", d_s_a + timedelta(days=30), key="adm_plan_d2", format="DD/MM/YYYY")
-            query = supabase.table("ateliers").select("*, lieux(nom), horaires(libelle)").gte("date_atelier", str(d_s_a)).lte("date_atelier", str(d_e_a))
+            query = supabase.table("ateliers").select("*").gte("date", str(d_s_a)).lte("date", str(d_e_a))
             if filtre_statut == "Actifs":
                 query = query.eq("est_actif", True)
             elif filtre_statut == "Inactifs":
                 query = query.eq("est_actif", False)
-            ats_adm = query.order("date_atelier").execute()
+            ats_adm = query.order("date").execute()
             cache_ins_adm = {}
             adm_ins_list = []
             if ats_adm.data:
@@ -815,7 +723,13 @@ elif menu == "🔐 Administration":
                     ins_at = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", a['id']).execute()
                     cache_ins_adm[a['id']] = ins_at.data
                     for p in ins_at.data:
-                        adm_ins_list.append({"Date": a['date_atelier'], "Atelier": a['titre'], "Lieu": a['lieux']['nom'], "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']})
+                        adm_ins_list.append({
+                            "Date": a['date'],
+                            "Atelier": a['titre'],
+                            "Lieu": a['lieu'],
+                            "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}",
+                            "Enfants": p['nb_enfants']
+                        })
             if adm_ins_list:
                 df_adm_at = pd.DataFrame(adm_ins_list)
             else:
@@ -827,14 +741,14 @@ elif menu == "🔐 Administration":
             ), file_name="admin_planning_ateliers.pdf", key="adm_exp_pdf")
             if ats_adm.data:
                 for index, a in enumerate(ats_adm.data):
-                    c_l = get_color(a['lieux']['nom'])
+                    c_l = get_color(a['lieu'])
                     ins_at = cache_ins_adm.get(a['id'], [])
                     t_ad, t_en = len(ins_at), sum([p['nb_enfants'] for p in ins_at])
                     restantes = a['capacite_max'] - (t_ad + t_en)
                     cl_c = "alerte-complet" if restantes <= 0 else ""
                     verrou_icon = " 🔒" if is_verrouille(a) else ""
-                    at_info_log = f"{a['date_atelier']} | {a['horaires']['libelle']} | {a['lieux']['nom']}"
-                    st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieux']['nom']}</span> | <span class='horaire-text'>{a['horaires']['libelle']}</span>{verrou_icon} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
+                    at_info_log = f"{a['date']} | {a['horaire']} | {a['lieu']}"
+                    st.markdown(f"**{format_date_fr_complete(a['date'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu']}</span> | <span class='horaire-text'>{a['horaire']}</span>{verrou_icon} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
                     if ins_at:
                         ins_s = sorted(ins_at, key=lambda x: (x['adherents']['nom'], x['adherents']['prenom']))
                         for p in ins_s:
@@ -880,9 +794,9 @@ elif menu == "🔐 Administration":
             cs1, cs2 = st.columns(2)
             ds_stat = cs1.date_input("Date début", date.today().replace(day=1), key="stat_d1", format="DD/MM/YYYY")
             de_stat = cs2.date_input("Date fin", date.today(), key="stat_d2", format="DD/MM/YYYY")
-            ins_stat = supabase.table("inscriptions").select("*, adherents(nom, prenom), ateliers!inner(date_atelier)").gte("ateliers.date_atelier", str(ds_stat)).lte("ateliers.date_atelier", str(de_stat)).execute()
-            ats_count = supabase.table("ateliers").select("id", count="exact").gte("date_atelier", str(ds_stat)).lte("date_atelier", str(de_stat)).execute()
-            ateliers_periode = supabase.table("ateliers").select("date_atelier, titre, lieux(nom), horaires(libelle)").gte("date_atelier", str(ds_stat)).lte("date_atelier", str(de_stat)).order("date_atelier").execute()
+            ins_stat = supabase.table("inscriptions").select("*, adherents(nom, prenom), ateliers!inner(date)").gte("ateliers.date", str(ds_stat)).lte("ateliers.date", str(de_stat)).execute()
+            ats_count = supabase.table("ateliers").select("id", count="exact").gte("date", str(ds_stat)).lte("date", str(de_stat)).execute()
+            ateliers_periode = supabase.table("ateliers").select("date, titre, lieu, horaire").gte("date", str(ds_stat)).lte("date", str(de_stat)).order("date").execute()
             if ins_stat.data:
                 stats_list = []
                 for am_nom in liste_adh:
@@ -898,10 +812,8 @@ elif menu == "🔐 Administration":
                 if ateliers_periode.data:
                     st.markdown("**Ateliers proposés :**")
                     for at in ateliers_periode.data:
-                        date_fr = format_date_fr_simple(at['date_atelier'])
-                        lieu_nom = at['lieux']['nom']
-                        horaire_lib = at['horaires']['libelle']
-                        st.write(f"- {date_fr} : **{at['titre']}** ({lieu_nom} - {horaire_lib})")
+                        date_fr = format_date_fr_simple(at['date'])
+                        st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu']} - {at['horaire']})")
                 else:
                     st.info("Aucun atelier proposé sur cette période.")
                 ce_s1, ce_s2 = st.columns(2)
@@ -910,25 +822,21 @@ elif menu == "🔐 Administration":
                 for _, r in df_stats.iterrows():
                     pdf_stat_lines.append(f"{r['Assistante Maternelle']} : {r['Nombre d\'ateliers']} atelier(s)")
                 pdf_stat_lines.append("")
-                pdf_stat_lines.append(f"Total inscriptions sur la periode : {total_inscr}")
-                pdf_stat_lines.append(f"Ateliers proposes sur la periode : {nb_at_proposes}")
+                pdf_stat_lines.append(f"Total inscriptions sur la période : {total_inscr}")
+                pdf_stat_lines.append(f"Ateliers proposés sur la période : {nb_at_proposes}")
                 pdf_stat_lines.append("")
-                pdf_stat_lines.append("Liste des ateliers proposes :")
+                pdf_stat_lines.append("Liste des ateliers proposés :")
                 for at in ateliers_periode.data:
-                    date_fr = format_date_fr_simple(at['date_atelier'])
-                    lieu_nom = at['lieux']['nom']
-                    horaire_lib = at['horaires']['libelle']
-                    pdf_stat_lines.append(f"- {date_fr} : {at['titre']} ({lieu_nom} - {horaire_lib})")
+                    date_fr = format_date_fr_simple(at['date'])
+                    pdf_stat_lines.append(f"- {date_fr} : {at['titre']} ({at['lieu']} - {at['horaire']})")
                 ce_s2.download_button("📥 PDF Statistiques", data=export_to_pdf("Statistiques de participation AM", pdf_stat_lines), file_name=f"stats_am_{ds_stat}_{de_stat}.pdf")
             else:
                 st.info("Aucune donnée pour cette période.")
                 if ateliers_periode.data:
                     st.markdown("**Ateliers proposés sur la période :**")
                     for at in ateliers_periode.data:
-                        date_fr = format_date_fr_simple(at['date_atelier'])
-                        lieu_nom = at['lieux']['nom']
-                        horaire_lib = at['horaires']['libelle']
-                        st.write(f"- {date_fr} : **{at['titre']}** ({lieu_nom} - {horaire_lib})")
+                        date_fr = format_date_fr_simple(at['date'])
+                        st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu']} - {at['horaire']})")
 
         with t5:  # 👥 LISTE AM
             with st.form("add_am"):
@@ -953,26 +861,26 @@ elif menu == "🔐 Administration":
                 st.subheader("Lieux")
                 for l in l_raw:
                     ca, cb = st.columns([0.8, 0.2])
-                    ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l['nom'])}'>{l['nom']} (Cap: {l['capacite_accueil']})</span>", unsafe_allow_html=True)
+                    ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l['nom'])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
                     if cb.button("🗑️", key=f"lx_{l['id']}"):
                         secure_delete_dialog("lieux", l['id'], l['nom'], current_code)
                 with st.form("add_lx"):
                     nl = st.text_input("Nouveau Lieu")
                     cp = st.number_input("Capacité", 1, 50, 10)
                     if st.form_submit_button("Ajouter"):
-                        supabase.table("lieux").insert({"nom": nl, "capacite_accueil": cp, "est_actif": True}).execute()
+                        supabase.table("lieux").insert({"nom": nl, "capacite": cp, "est_actif": True}).execute()
                         st.rerun()
             with cl2:
                 st.subheader("Horaires")
                 for h in h_raw:
                     cc, cd = st.columns([0.8, 0.2])
-                    cc.write(f"• {h['libelle']}")
+                    cc.write(f"• {h['creneau']}")
                     if cd.button("🗑️", key=f"hx_{h['id']}"):
-                        secure_delete_dialog("horaires", h['id'], h['libelle'], current_code)
+                        secure_delete_dialog("horaires", h['id'], h['creneau'], current_code)
                 with st.form("add_hx"):
                     nh = st.text_input("Nouvel Horaire")
                     if st.form_submit_button("Ajouter"):
-                        supabase.table("horaires").insert({"libelle": nh, "est_actif": True}).execute()
+                        supabase.table("horaires").insert({"creneau": nh, "est_actif": True}).execute()
                         st.rerun()
 
         with t7:  # ⚙️ SÉCURITÉ
