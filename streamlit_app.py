@@ -672,12 +672,17 @@ elif menu == "🔐 Administration":
                         supabase.table("ateliers").update({"est_actif": (action == "Activer")}).gte("date", str(bs)).lte("date", str(be)).execute()
                         st.rerun()
 
-        with t2:  # SUIVI AM (Admin)
+with t2:  # SUIVI AM (Admin)
             choix_adm = st.multiselect("Filtrer par AM (Admin) :", liste_adh, key="adm_filter_am")
             ids_adm = [dict_adh[n] for n in choix_adm] if choix_adm else list(dict_adh.values())
-            data_adm = supabase.table("inscriptions").select("*, ateliers(*), adherents(nom, prenom)").in_("adherent_id", ids_adm).eq("ateliers.est_actif", True).execute()
-
-            data_adm_triee = trier_par_nom_puis_date(data_adm.data) if data_adm.data else []
+            
+            # Correction : On récupère les données sans le filtre .eq sur la jointure
+            res_raw = supabase.table("inscriptions").select("*, ateliers(*), adherents(nom, prenom)").in_("adherent_id", ids_adm).execute()
+            
+            # Filtre manuel en Python pour ne garder que les inscriptions dont l'atelier est actif
+            data_adm_data = [i for i in res_raw.data if i.get('ateliers') and i['ateliers'].get('est_actif') == True]
+            
+            data_adm_triee = trier_par_nom_puis_date(data_adm_data) if data_adm_data else []
 
             if data_adm.data:
                 df_adm = pd.DataFrame([{
