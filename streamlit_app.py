@@ -529,7 +529,7 @@ elif menu == "🔐 Administration":
             "📍 Lieux / Horaires", "⚙️ Sécurité", "📜 Journal des actions"
         ])
 
-with t1:  # ATELIERS
+        with t1:  # ATELIERS
             # Chargement sécurisé des lieux et horaires
             try:
                 l_raw = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data
