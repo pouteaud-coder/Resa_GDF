@@ -807,14 +807,35 @@ elif menu == "🔐 Administration":
             cs1, cs2 = st.columns(2)
             ds_stat = cs1.date_input("Date début", date.today().replace(day=1), key="stat_d1", format="DD/MM/YYYY")
             de_stat = cs2.date_input("Date fin", date.today(), key="stat_d2", format="DD/MM/YYYY")
-            ins_stat = supabase.table("inscriptions").select("*, adherents(nom, prenom), ateliers!inner(date)").gte("ateliers.date", str(ds_stat)).lte("ateliers.date", str(de_stat)).execute()
-            ats_count = supabase.table("ateliers").select("id", count="exact").gte("date", str(ds_stat)).lte("date", str(de_stat)).execute()
-            ateliers_periode = supabase.table("ateliers").select("date, titre, lieu, horaire").gte("date", str(ds_stat)).lte("date", str(de_stat)).order("date").execute()
-            if ins_stat.data:
+            # Récupération complète des inscriptions avec jointures
+            ins_stat_full = supabase.table("inscriptions").select("*, adherents(nom, prenom), ateliers!inner(*)").execute()
+            # Filtrage en fonction des dates (ds_stat, de_stat sont des objets date)
+            ds_str = ds_stat.strftime("%Y-%m-%d")
+            de_str = de_stat.strftime("%Y-%m-%d")
+            filtered_ins = []
+            for ins in ins_stat_full.data:
+                at_date = ins['ateliers']['date']  # format 'YYYY-MM-DD'
+                if ds_str <= at_date <= de_str:
+                    filtered_ins.append(ins)
+            
+            ats_count = supabase.table("ateliers").select("id", count="exact").gte("date", ds_str).lte("date", de_str).execute()
+            ateliers_periode = supabase.table("ateliers").select("date, titre, lieu, horaire").gte("date", ds_str).lte("date", de_str).order("date").execute()
+            
+            if filtered_ins:
                 stats_list = []
                 for am_nom in liste_adh:
                     am_id = dict_adh[am_nom]
-                    count = sum(1 for x in ins_stat.data if x['adherent_id'] == am_id)
+                    count = sum(1 for x in filtered_ins if x['adherent_id'] == am_id)
+                    stats_list.append({"Assistante Maternelle": am_nom, "Nombre d'ateliers": count})
+                df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False)
+                st.table(df_stats)
+                total_inscr = df_stats["Nombre d'ateliers"].sum()
+                nb_at_proposes = ats_count.count if ats_count.count else 0
+                st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
+                st.markdown(f"**Nombre d'ateliers proposés sur la période :** {nb_at_proposes}")
+                # ... reste du code identique
+            else:
+                st.info("Aucune donnée pour cette période.")
                     stats_list.append({"Assistante Maternelle": am_nom, "Nombre d'ateliers": count})
                 df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False)
                 st.table(df_stats)
