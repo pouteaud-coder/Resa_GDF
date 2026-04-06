@@ -765,7 +765,10 @@ elif menu == "🔐 Administration":
         with t2: # SUIVI AM (Admin)
             choix_adm = st.multiselect("Filtrer par AM (Admin) :", liste_adh, key="adm_filter_am")
             ids_adm = [dict_adh[n] for n in choix_adm] if choix_adm else list(dict_adh.values())
-            data_adm = supabase.table("inscriptions").select("*, ateliers!inner(*, lieux(nom), horaires(libelle)), adherents(nom, prenom)").in_("adherent_id", ids_adm).eq("ateliers.est_actif", True).execute()
+           data_adm = supabase.table("inscriptions").select("*, ateliers!inner(*, lieux!inner(nom), horaires!inner(libelle)), adherents(nom, prenom)").in_("adherent_id", ids_adm).execute()
+# Puis filtrer en Python sur ateliers.est_actif
+if data_adm.data:
+    data_adm.data = [row for row in data_adm.data if row['ateliers'].get('est_actif', True)]
 
             data_adm_triee = trier_par_nom_puis_date(data_adm.data) if data_adm.data else []
 
