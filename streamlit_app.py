@@ -529,14 +529,18 @@ elif menu == "🔐 Administration":
             "📍 Lieux / Horaires", "⚙️ Sécurité", "📜 Journal des actions"
         ])
 
-        with t1:  # ATELIERS
-            # Chargement des lieux et horaires depuis leurs tables (pour les listes déroulantes)
-            l_raw = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data
-            h_raw = supabase.table("horaires").select("*").eq("est_actif", True).execute().data
-            l_list = [l['nom'] for l in l_raw]
-            h_list = [h['creneau'] for h in h_raw]  # colonne 'creneau'
-            map_l_cap = {l['nom']: l['capacite'] for l in l_raw}  # colonne 'capacite'
-            # Pas de map_l_id ni map_h_id car on stocke le texte directement
+       with t1:  # ATELIERS
+            # Chargement sécurisé des lieux et horaires pour éviter l'erreur API
+            try:
+                l_raw = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data
+                h_raw = supabase.table("horaires").select("*").eq("est_actif", True).execute().data
+            except Exception as e:
+                st.error(f"Erreur Supabase (Vérifiez les tables 'lieux' ou 'horaires') : {e}")
+                l_raw, h_raw = [], []
+
+            l_list = [l['nom'] for l in l_raw] if l_raw else []
+            h_list = [h['creneau'] for h in h_raw] if h_raw else []
+            map_l_cap = {l['nom']: l.get('capacite', 0) for l in l_raw} if l_raw else {}
 
             sub = st.radio("Mode", ["Générateur", "Répertoire", "Actions groupées"], horizontal=True)
 
