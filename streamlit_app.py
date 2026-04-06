@@ -672,7 +672,7 @@ elif menu == "🔐 Administration":
                         supabase.table("ateliers").update({"est_actif": (action == "Activer")}).gte("date", str(bs)).lte("date", str(be)).execute()
                         st.rerun()
 
-with t2:  # SUIVI AM (Admin)
+        with t2:  # SUIVI AM (Admin)
             choix_adm = st.multiselect("Filtrer par AM (Admin) :", liste_adh, key="adm_filter_am")
             ids_adm = [dict_adh[n] for n in choix_adm] if choix_adm else list(dict_adh.values())
             
