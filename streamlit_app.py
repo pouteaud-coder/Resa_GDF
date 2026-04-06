@@ -71,6 +71,7 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
     .stTabs [data-baseweb="tab"] { background-color: #e6f4ff; border-radius: 20px !important; padding: 6px 18px; color: #1b5e20; border: 1px solid #a8cfe8 !important; font-size: 0.9rem; }
     .stTabs [aria-selected="true"] { background-color: #1b5e20 !important; color: white !important; border-color: #1b5e20 !important; }
+    .stTabs [data-baseweb="tab-panel"] { background-color: #e6f4ff; border-radius: 0px 16px 16px 16px !important; border: 1px solid #a8cfe8 !important; padding: 18px 20px !important; margin-top: 4px; }
     .stAlert { background-color: #cfe9ff; border-left-color: #1b5e20; color: #1b5e20; }
     .stSuccess { background-color: #d0e8d0; color: #0a3d0a; }
     .stError { background-color: #ffdddd; color: #c62828; }
