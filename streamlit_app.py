@@ -529,18 +529,18 @@ elif menu == "🔐 Administration":
             "📍 Lieux / Horaires", "⚙️ Sécurité", "📜 Journal des actions"
         ])
 
-       with t1:  # ATELIERS
-            # Chargement sécurisé des lieux et horaires pour éviter l'erreur API
+with t1:  # ATELIERS
+            # Chargement sécurisé des lieux et horaires
             try:
                 l_raw = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data
                 h_raw = supabase.table("horaires").select("*").eq("est_actif", True).execute().data
+                
+                l_list = [l['nom'] for l in l_raw] if l_raw else []
+                h_list = [h['creneau'] for h in h_raw] if h_raw else []
+                map_l_cap = {l['nom']: l.get('capacite', 0) for l in l_raw} if l_raw else {}
             except Exception as e:
-                st.error(f"Erreur Supabase (Vérifiez les tables 'lieux' ou 'horaires') : {e}")
-                l_raw, h_raw = [], []
-
-            l_list = [l['nom'] for l in l_raw] if l_raw else []
-            h_list = [h['creneau'] for h in h_raw] if h_raw else []
-            map_l_cap = {l['nom']: l.get('capacite', 0) for l in l_raw} if l_raw else {}
+                st.error(f"Erreur Supabase : {e}")
+                l_list, h_list, map_l_cap = [], [], {}
 
             sub = st.radio("Mode", ["Générateur", "Répertoire", "Actions groupées"], horizontal=True)
 
