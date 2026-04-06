@@ -40,7 +40,7 @@ check_access()
 
 # --- TITRE DE L'APPLICATION ---
 st.markdown("""
-    <div style="display: flex; align-items: center; background-color: #cfe9ff; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 2px solid #1b5e20;">
+    <div style="display: flex; align-items: center; background-color: #e6f4ff; padding: 20px; border-radius: 15px; margin-bottom: 25px;">
         <div style="font-size: 3.5rem; margin-right: 20px;">🎨</div>
         <div>
             <h1 style="color: #1b5e20; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 2.8rem;">Résa GDF</h1>
@@ -631,7 +631,7 @@ elif menu == "🔐 Administration":
 
         with t1: # ATELIERS
             l_raw = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data
-            h_raw = supabase.table("horaires").select("*").eq("est_actif", True).execute().data
+            h_raw = supabase.table("horaires").select("*").execute().data
             l_list = [l['nom'] for l in l_raw]; h_list = [h['libelle'] for h in h_raw]
             map_l_cap = {l['nom']: l['capacite_accueil'] for l in l_raw}
             map_l_id = {l['nom']: l['id'] for l in l_raw}; map_h_id = {h['libelle']: h['id'] for h in h_raw}
