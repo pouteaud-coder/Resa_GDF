@@ -10,15 +10,41 @@ from fpdf import FPDF
 # ==========================================
 # CONFIGURATION ET INITIALISATION
 # ==========================================
-st.set_page_config(page_title="RPE Connect", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="Résa GDF", page_icon="🌿", layout="wide")
+
+# --- GATEKEEPER : Code d'accès général ---
+def check_access():
+    """Vérifie si l'utilisateur a saisi le bon code d'accès."""
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+
+    if not st.session_state["authenticated"]:
+        st.markdown("""
+            <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh;">
+                <div style="background-color: #cfe9ff; padding: 2rem; border-radius: 20px; text-align: center; border: 2px solid #1b5e20;">
+                    <h2 style="color: #1b5e20;">🔐 Accès sécurisé</h2>
+                    <p style="color: #1b5e20;">Veuillez saisir le code d'accès pour continuer.</p>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        code = st.text_input("Code d'accès", type="password", key="gate_code")
+        if st.button("Valider", type="primary"):
+            if code == "78955":
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Code incorrect. Accès refusé.")
+        st.stop()
+
+check_access()
 
 # --- TITRE DE L'APPLICATION ---
 st.markdown("""
-    <div style="display: flex; align-items: center; background-color: #fdf2e9; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 2px solid #ff9800;">
+    <div style="display: flex; align-items: center; background-color: #cfe9ff; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 2px solid #1b5e20;">
         <div style="font-size: 3.5rem; margin-right: 20px;">🎨</div>
         <div>
-            <h1 style="color: #e65100; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 2.8rem;">Résa RPE</h1>
-            <p style="margin: 0; color: #d35400; font-weight: bold; font-size: 1.1rem;">Ateliers d'éveil & Activités manuelles</p>
+            <h1 style="color: #1b5e20; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 2.8rem;">Résa GDF</h1>
+            <p style="margin: 0; color: #0a3d0a; font-weight: bold; font-size: 1.1rem;">Ateliers d'éveil & Activités manuelles</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -28,27 +54,142 @@ url = st.secrets["supabase_url"]
 key = st.secrets["supabase_key"]
 supabase: Client = create_client(url, key)
 
-# --- STYLE CSS ---
+# --- STYLE CSS (nouvelle palette : fond bleu pâle, texte vert foncé) ---
 st.markdown("""
     <style>
-    html, body, [class*="st-"] { font-size: 1.05rem !important; }
-    .lieu-badge { padding: 3px 10px; border-radius: 6px; color: white; font-weight: bold; font-size: 0.85rem; display: inline-block; margin: 2px 0; }
-    .horaire-text { font-size: 0.9rem; color: #666; font-weight: 400; }
-    .compteur-badge { font-size: 0.85rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background-color: #f0f2f6; color: #31333F; border: 1px solid #ddd; margin-left: 5px; }
-    .alerte-complet { background-color: #d32f2f !important; color: white !important; border-color: #b71c1c !important; }
-    .separateur-atelier { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
-    .container-inscrits { margin-top: -8px; padding-top: 0; margin-bottom: 5px; }
-    .liste-inscrits { font-size: 0.95rem !important; color: #555; margin-left: 20px; display: block; line-height: 1.1; }
-    .nb-enfants-focus { color: #2e7d32; font-weight: 600; }
-    .stButton button { border-radius: 8px !important; }
-    .badge-verrouille { background-color: #e65100; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
+    /* Couleurs globales */
+    html, body, [class*="st-"] {
+        font-size: 1.05rem !important;
+        background-color: #e6f4ff !important;  /* fond bleu très pâle */
+        color: #1b5e20 !important;             /* texte vert foncé */
+    }
+    .stApp {
+        background-color: #e6f4ff;
+    }
+    /* Badges lieux */
+    .lieu-badge {
+        padding: 3px 10px;
+        border-radius: 6px;
+        color: white;
+        font-weight: bold;
+        font-size: 0.85rem;
+        display: inline-block;
+        margin: 2px 0;
+    }
+    .horaire-text {
+        font-size: 0.9rem;
+        color: #2e7d32;   /* vert moyen */
+        font-weight: 400;
+    }
+    .compteur-badge {
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background-color: #d4e6f1;
+        color: #1b5e20;
+        border: 1px solid #1b5e20;
+        margin-left: 5px;
+    }
+    .alerte-complet {
+        background-color: #c62828 !important;
+        color: white !important;
+        border-color: #b71c1c !important;
+    }
+    .separateur-atelier {
+        border: 0;
+        border-top: 1px solid #b0d4ff;
+        margin: 15px 0;
+    }
+    .container-inscrits {
+        margin-top: -8px;
+        padding-top: 0;
+        margin-bottom: 5px;
+    }
+    .liste-inscrits {
+        font-size: 0.95rem !important;
+        color: #1b5e20;
+        margin-left: 20px;
+        display: block;
+        line-height: 1.1;
+    }
+    .nb-enfants-focus {
+        color: #0a3d0a;
+        font-weight: 600;
+    }
+    .stButton button {
+        border-radius: 8px !important;
+        background-color: #1b5e20 !important;
+        color: white !important;
+        border: none !important;
+    }
+    .stButton button:hover {
+        background-color: #0a3d0a !important;
+    }
+    .badge-verrouille {
+        background-color: #1b5e20;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+        margin-left: 6px;
+    }
+    /* Onglets */
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+        color: #1b5e20 !important;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #d4e6f1;
+        border-radius: 8px;
+        padding: 8px 16px;
+        color: #1b5e20;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #1b5e20 !important;
+        color: white !important;
+    }
+    /* Messages d'info, succès, erreur */
+    .stAlert {
+        background-color: #cfe9ff;
+        border-left-color: #1b5e20;
+        color: #1b5e20;
+    }
+    .stSuccess {
+        background-color: #d0e8d0;
+        color: #0a3d0a;
+    }
+    .stError {
+        background-color: #ffdddd;
+        color: #c62828;
+    }
+    /* Inputs */
+    input, textarea, select {
+        background-color: #ffffff !important;
+        color: #1b5e20 !important;
+        border-color: #1b5e20 !important;
+    }
+    /* Sidebar */
+    .css-1d391kg, .css-1lcbmhc {
+        background-color: #cfe9ff !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # --- FONCTIONS UTILITAIRES ---
 def get_color(nom_lieu):
+    """Génère une couleur basée sur le nom du lieu, dans une palette vert/bleu."""
     hash_object = hashlib.md5(str(nom_lieu).upper().strip().encode())
-    return f"#{hash_object.hexdigest()[:6]}"
+    # On force des teintes de vert/bleu (modulo 180°)
+    hue = int(hash_object.hexdigest()[:6], 16) % 180
+    # Convertir en HSL simplifié : saturation 70%, luminosité 40% pour un rendu lisible
+    # On retourne du vert/bleu
+    # Utilisation d'une palette pré-définie pour rester cohérent
+    colors = ["#2e7d32", "#1b5e20", "#0a3d0a", "#1565c0", "#1976d2", "#0d47a1"]
+    return colors[hue % len(colors)]
 
 def get_secret_code():
     try:
@@ -68,7 +209,6 @@ def heure_paris_fr():
     return f"le {j} {now.day} {m} {now.year} à {now.hour:02d}h{now.minute:02d}"
 
 def enregistrer_log(utilisateur, action, details):
-    """Enregistre une action dans la table logs avec l'heure Paris dans les détails"""
     try:
         heure_str = heure_paris_fr()
         details_avec_heure = f"{details} [{heure_str}]"
@@ -90,7 +230,6 @@ def format_date_fr_complete(date_obj, gras=True):
     return f"**{res}**" if gras else res
 
 def format_date_fr_simple(date_str):
-    """Retourne une date ISO en texte français sans astérisques, ex: Lundi 3 avril 2026"""
     jours = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
     mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
     try:
@@ -100,26 +239,16 @@ def format_date_fr_simple(date_str):
         return str(date_str)
 
 def parse_date_fr_to_iso(date_str):
-    """
-    Convertit une date au format français (Lundi 18 juin 2026) ou au format court (18/06/2026)
-    ou au format ISO (2026-06-18) vers ISO YYYY-MM-DD.
-    """
-    # Nettoyage : suppression des éventuels ** et des espaces
     clean = str(date_str).replace("**", "").strip()
     if not clean:
         return None
-    
-    # Essai ISO déjà
     try:
         d = datetime.strptime(clean, '%Y-%m-%d')
         return d.strftime('%Y-%m-%d')
     except:
         pass
-    
-    # Essai format français avec jour de la semaine et mois en toutes lettres
     parts = clean.split(" ")
     if len(parts) >= 4:
-        # On ignore le jour de la semaine (premier mot)
         jour = parts[1]
         mois_texte = parts[2].lower()
         annee = parts[3]
@@ -131,8 +260,6 @@ def parse_date_fr_to_iso(date_str):
                 return f"{annee}-{m:02d}-{int(jour):02d}"
             except:
                 pass
-    
-    # Essai format court JJ/MM/AAAA ou JJ-MM-AAAA
     try:
         for sep in ['/', '-']:
             if sep in clean:
@@ -140,23 +267,19 @@ def parse_date_fr_to_iso(date_str):
                 return f"{int(a):04d}-{int(m):02d}-{int(j):02d}"
     except:
         pass
-    
-    # Dernier recours : retourner la chaîne brute (provoquera une erreur plus tard)
     return clean
 
 def is_verrouille(at):
-    """Retourne True si l'atelier est verrouillé"""
     return bool(at.get("Verrouille", at.get("verrouille", False)))
 
 def trier_par_nom_puis_date(data):
-    """Trie une liste d'inscriptions par nom alphabétique puis date croissante"""
     return sorted(data, key=lambda i: (
         i['adherents']['nom'].upper(),
         i['adherents']['prenom'].upper(),
         i['ateliers']['date_atelier']
     ))
 
-# --- FONCTIONS D'EXPORT ---
+# --- FONCTIONS D'EXPORT (inchangées sauf les couleurs dans PDF non affectées) ---
 def export_to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -164,7 +287,6 @@ def export_to_excel(df):
     return output.getvalue()
 
 def export_to_pdf(title, data_list):
-    """Export PDF simple (liste de lignes texte) — utilisé pour planning et stats"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
@@ -179,22 +301,15 @@ def export_to_pdf(title, data_list):
     return pdf.output(dest='S').encode('latin-1')
 
 def export_suivi_am_pdf(title, data_triee):
-    """
-    Export PDF du suivi AM avec mise en forme fidèle à l'écran :
-    - En-tête vert par AM (nom en gras)
-    - Pour chaque atelier : date en français, titre, lieu, horaire, nb enfants
-    """
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
     pdf.ln(6)
-
     if not data_triee:
         pdf.set_font("Arial", size=11)
         pdf.cell(0, 10, txt="Aucune inscription trouvée.", ln=True)
         return pdf.output(dest='S').encode('latin-1')
-
     curr_am = ""
     for i in data_triee:
         nom_am = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
@@ -204,45 +319,32 @@ def export_suivi_am_pdf(title, data_triee):
         lieu = at['lieux']['nom']
         horaire = at['horaires']['libelle']
         nb_enf = i['nb_enfants']
-
-        # En-tête AM (fond vert, texte blanc)
         if nom_am != curr_am:
             pdf.ln(3)
-            pdf.set_fill_color(27, 94, 32)   # vert foncé #1b5e20
+            pdf.set_fill_color(27, 94, 32)   # vert foncé
             pdf.set_text_color(255, 255, 255)
             pdf.set_font("Arial", 'B', 12)
             pdf.cell(0, 9, f"  {nom_am}".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
             pdf.set_text_color(0, 0, 0)
             curr_am = nom_am
-
-        # Ligne atelier
         pdf.set_font("Arial", 'B', 10)
         ligne_date = f"  {date_fr}".encode('latin-1', 'replace').decode('latin-1')
         pdf.cell(0, 6, ligne_date, ln=True)
-
         pdf.set_font("Arial", size=10)
         detail = f"     {titre_at}  |  {lieu}  |  {horaire}  |  {nb_enf} enfant(s)"
         pdf.cell(0, 6, detail.encode('latin-1', 'replace').decode('latin-1'), ln=True)
-
     return pdf.output(dest='S').encode('latin-1')
 
 def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn):
-    """
-    Export PDF du planning des ateliers avec mise en forme fidèle à l'écran :
-    - En-tête par atelier : date, titre, lieu, horaire, compteurs
-    - Liste des inscrits en dessous
-    """
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
     pdf.ln(6)
-
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
         pdf.cell(0, 10, txt="Aucun atelier trouvé sur cette période.", ln=True)
         return pdf.output(dest='S').encode('latin-1')
-
     for a in ateliers_data:
         ins_at = get_inscrits_fn(a['id'])
         t_ad = len(ins_at)
@@ -253,30 +355,23 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn):
         lieu = a['lieux']['nom']
         horaire = a['horaires']['libelle']
         verrou = " [VERROUILLE]" if is_verrouille(a) else ""
-
-        # En-tête atelier (fond bleu-gris)
-        pdf.set_fill_color(224, 235, 245)
+        pdf.set_fill_color(212, 230, 241)  # bleu pâle
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", 'B', 11)
         entete = f"  {date_fr} | {titre_at} | {lieu}{verrou}"
         pdf.cell(0, 8, entete.encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
-
         pdf.set_font("Arial", size=10)
         sous = f"     Horaire : {horaire}  |  AM : {t_ad}  |  Enfants : {t_en}  |  Places restantes : {restantes}"
         pdf.cell(0, 6, sous.encode('latin-1', 'replace').decode('latin-1'), ln=True)
-
-        # Inscrits triés alphabétiquement
         ins_tries = sorted(ins_at, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
         for p in ins_tries:
             nom_p = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
             ligne = f"       • {nom_p}  ({p['nb_enfants']} enfant(s))"
             pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
-
         pdf.ln(3)
-
     return pdf.output(dest='S').encode('latin-1')
 
-# --- DIALOGUES ---
+# --- DIALOGUES (inchangés, mais les couleurs des boutons sont déjà modifiées globalement) ---
 @st.dialog("⚠️ Confirmation")
 def secure_delete_dialog(table, item_id, label, current_code):
     st.write(f"Voulez-vous vraiment désactiver/supprimer : **{label}** ?")
@@ -326,36 +421,26 @@ def super_admin_dialog():
 
 @st.dialog("✏️ Modifier l'atelier")
 def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
-    """Dialogue de modification d'un atelier (titre, lieu, horaire, capacité)"""
-    # Chargement des inscriptions pour vérifier la capacité minimale
     inscriptions = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", at_id).execute()
     total_occupation = sum([1 + ins['nb_enfants'] for ins in inscriptions.data]) if inscriptions.data else 0
-
-    # Sélecteurs
     lieux_options = [l['nom'] for l in lieux_list]
     horaires_options = [h['libelle'] for h in horaires_list]
     lieu_actuel_nom = next((l['nom'] for l in lieux_list if l['id'] == lieu_id_actuel), lieux_options[0] if lieux_options else "")
     horaire_actuel_lib = next((h['libelle'] for h in horaires_list if h['id'] == horaire_id_actuel), horaires_options[0] if horaires_options else "")
-
     nouveau_titre = st.text_input("Titre", value=titre_actuel)
     nouveau_lieu = st.selectbox("Lieu", options=lieux_options, index=lieux_options.index(lieu_actuel_nom) if lieu_actuel_nom in lieux_options else 0)
     nouvel_horaire = st.selectbox("Horaire", options=horaires_options, index=horaires_options.index(horaire_actuel_lib) if horaire_actuel_lib in horaires_options else 0)
     nouvelle_capacite = st.number_input("Capacité maximale (places totales)", min_value=1, value=int(capacite_actuelle))
-
-    # Vérification de cohérence
     if nouvelle_capacite < total_occupation:
         st.error(f"La capacité ne peut pas être inférieure au nombre actuel d'occupants ({total_occupation} places prises).")
-
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Annuler", use_container_width=True):
             st.rerun()
     with col2:
         if st.button("Enregistrer", type="primary", use_container_width=True, disabled=(nouvelle_capacite < total_occupation)):
-            # Récupération des IDs
             nouveau_lieu_id = next(l['id'] for l in lieux_list if l['nom'] == nouveau_lieu)
             nouvel_horaire_id = next(h['id'] for h in horaires_list if h['libelle'] == nouvel_horaire)
-            # Mise à jour
             supabase.table("ateliers").update({
                 "titre": nouveau_titre,
                 "lieu_id": nouveau_lieu_id,
@@ -451,10 +536,8 @@ elif menu == "📊 Suivi & Récap":
         ids = [dict_adh[n] for n in choix] if choix else list(dict_adh.values())
         data = supabase.table("inscriptions").select("*, ateliers!inner(*, lieux(nom), horaires(libelle)), adherents(nom, prenom)").in_("adherent_id", ids).eq("ateliers.est_actif", True).execute()
 
-        # Préparation des données pour export (triées)
         data_triee = trier_par_nom_puis_date(data.data) if data.data else []
 
-        # Export Excel
         if data.data:
             df_export = pd.DataFrame([{
                 "Assistante Maternelle": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
@@ -471,7 +554,6 @@ elif menu == "📊 Suivi & Récap":
         c_e1.download_button("📥 Excel", data=export_to_excel(df_export), file_name="suivi_am.xlsx")
         c_e2.download_button("📥 PDF", data=export_suivi_am_pdf("Suivi par Assistante Maternelle", data_triee), file_name="suivi_am.pdf")
 
-        # Affichage écran
         if data.data:
             curr_u = ""
             for i in data_triee:
@@ -491,7 +573,6 @@ elif menu == "📊 Suivi & Récap":
         d_e = c_d2.date_input("Au", d_s + timedelta(days=30), key="pub_d2", format="DD/MM/YYYY")
         ats_raw = supabase.table("ateliers").select("*, lieux(nom), horaires(libelle)").eq("est_actif", True).gte("date_atelier", str(d_s)).lte("date_atelier", str(d_e)).order("date_atelier").execute()
 
-        # Préparation des données pour export
         all_ins_data = []
         cache_ins = {}
         if ats_raw.data:
@@ -505,7 +586,6 @@ elif menu == "📊 Suivi & Récap":
                         "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
                     })
 
-        # Export Excel planning (toujours disponible)
         if all_ins_data:
             df_at_exp = pd.DataFrame(all_ins_data)
         else:
@@ -513,12 +593,10 @@ elif menu == "📊 Suivi & Récap":
 
         ce1, ce2 = st.columns(2)
         ce1.download_button("📥 Excel Planning", data=export_to_excel(df_at_exp), file_name="planning_ateliers.xlsx", key="exp_at_xl")
-        # PDF mis en forme planning par atelier (toujours disponible)
         ce2.download_button("📥 PDF Planning", data=export_planning_ateliers_pdf(
             "Planning des Ateliers", ats_raw.data if ats_raw.data else [], lambda aid: cache_ins.get(aid, [])
         ), file_name="planning_ateliers.pdf", key="exp_at_pdf")
 
-        # Affichage écran (avec titre entre date et lieu)
         if ats_raw.data:
             for index, a in enumerate(ats_raw.data):
                 c_l = get_color(a['lieux']['nom'])
@@ -560,7 +638,6 @@ elif menu == "🔐 Administration":
             sub = st.radio("Mode", ["Générateur", "Répertoire", "Actions groupées"], horizontal=True)
 
             if sub == "Générateur":
-                # Sélection du lieu et horaire par défaut avant génération
                 col_lieu, col_horaire = st.columns(2)
                 with col_lieu:
                     lieu_par_defaut = st.selectbox("Lieu par défaut pour les nouvelles lignes :", 
@@ -590,7 +667,7 @@ elif menu == "🔐 Administration":
                                 "Lieu": lieu_val, 
                                 "Horaire": horaire_val, 
                                 "Capacité": capa, 
-                                "Actif": False,   # ← MODIFICATION : par défaut inactif
+                                "Actif": False,
                                 "Verrouillé": False
                             })
                         curr += timedelta(days=1)
@@ -604,7 +681,7 @@ elif menu == "🔐 Administration":
                         column_config={
                             "Lieu": st.column_config.SelectboxColumn(options=l_list, required=False),
                             "Horaire": st.column_config.SelectboxColumn(options=h_list, required=False),
-                            "Actif": st.column_config.CheckboxColumn(default=False),  # ← MODIFICATION : décoché par défaut
+                            "Actif": st.column_config.CheckboxColumn(default=False),
                             "Verrouillé": st.column_config.CheckboxColumn(default=False, help="Si coché, seul l'admin peut gérer les inscriptions")
                         },
                         use_container_width=True,
@@ -724,23 +801,19 @@ elif menu == "🔐 Administration":
         with t3: # PLANNING ATELIERS (Admin)
             st.subheader("📅 Planning des Ateliers")
             
-            # Filtre statut
             filtre_statut = st.radio("Filtrer par statut :", ["Tous", "Actifs", "Inactifs"], horizontal=True, key="admin_plan_filtre")
             
             c1_adm, c2_adm = st.columns(2)
             d_s_a = c1_adm.date_input("Du", date.today(), key="adm_plan_d1", format="DD/MM/YYYY")
             d_e_a = c2_adm.date_input("Au", d_s_a + timedelta(days=30), key="adm_plan_d2", format="DD/MM/YYYY")
             
-            # Construction de la requête en fonction du filtre
             query = supabase.table("ateliers").select("*, lieux(nom), horaires(libelle)").gte("date_atelier", str(d_s_a)).lte("date_atelier", str(d_e_a))
             if filtre_statut == "Actifs":
                 query = query.eq("est_actif", True)
             elif filtre_statut == "Inactifs":
                 query = query.eq("est_actif", False)
-            # Si "Tous", pas de filtre sur est_actif
             ats_adm = query.order("date_atelier").execute()
 
-            # Préparation des données pour export
             cache_ins_adm = {}
             adm_ins_list = []
             if ats_adm.data:
@@ -771,7 +844,6 @@ elif menu == "🔐 Administration":
                     verrou_icon = " 🔒" if is_verrouille(a) else ""
                     at_info_log = f"{a['date_atelier']} | {a['horaires']['libelle']} | {a['lieux']['nom']}"
 
-                    # Affichage avec titre entre date et lieu
                     st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieux']['nom']}</span> | <span class='horaire-text'>{a['horaires']['libelle']}</span>{verrou_icon} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
 
                     if ins_at:
@@ -823,7 +895,6 @@ elif menu == "🔐 Administration":
             ins_stat = supabase.table("inscriptions").select("*, adherents(nom, prenom), ateliers!inner(date_atelier)").gte("ateliers.date_atelier", str(ds_stat)).lte("ateliers.date_atelier", str(de_stat)).execute()
             ats_count = supabase.table("ateliers").select("id", count="exact").gte("date_atelier", str(ds_stat)).lte("date_atelier", str(de_stat)).execute()
             
-            # Récupération de la liste des ateliers pour l'affichage
             ateliers_periode = supabase.table("ateliers").select("date_atelier, titre, lieux(nom), horaires(libelle)").gte("date_atelier", str(ds_stat)).lte("date_atelier", str(de_stat)).order("date_atelier").execute()
             
             if ins_stat.data:
@@ -833,14 +904,12 @@ elif menu == "🔐 Administration":
                     count = sum(1 for x in ins_stat.data if x['adherent_id'] == am_id)
                     stats_list.append({"Assistante Maternelle": am_nom, "Nombre d'ateliers": count})
                 df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False)
-                # Affichage du tableau sans colonne d'index
                 st.table(df_stats)
                 total_inscr = df_stats["Nombre d'ateliers"].sum()
                 nb_at_proposes = ats_count.count if ats_count.count else 0
                 st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
                 st.markdown(f"**Nombre d'ateliers proposés sur la période :** {nb_at_proposes}")
                 
-                # Liste détaillée des ateliers proposés
                 if ateliers_periode.data:
                     st.markdown("**Ateliers proposés :**")
                     for at in ateliers_periode.data:
@@ -853,7 +922,6 @@ elif menu == "🔐 Administration":
                 
                 ce_s1, ce_s2 = st.columns(2)
                 ce_s1.download_button("📥 Excel Statistiques", data=export_to_excel(df_stats), file_name=f"stats_am_{ds_stat}_{de_stat}.xlsx")
-                # PDF stats mis en forme : tableau + totaux + liste ateliers
                 pdf_stat_lines = []
                 for _, r in df_stats.iterrows():
                     pdf_stat_lines.append(f"{r['Assistante Maternelle']} : {r['Nombre d\'ateliers']} atelier(s)")
@@ -870,7 +938,6 @@ elif menu == "🔐 Administration":
                 ce_s2.download_button("📥 PDF Statistiques", data=export_to_pdf("Statistiques de participation AM", pdf_stat_lines), file_name=f"stats_am_{ds_stat}_{de_stat}.pdf")
             else:
                 st.info("Aucune donnée pour cette période.")
-                # Même si aucune inscription, on peut afficher les ateliers proposés
                 if ateliers_periode.data:
                     st.markdown("**Ateliers proposés sur la période :**")
                     for at in ateliers_periode.data:
@@ -932,7 +999,6 @@ elif menu == "🔐 Administration":
                 res_logs = supabase.table("logs").select("*").gte("created_at", start_date).lte("created_at", end_date).order("created_at", desc=True).execute()
                 if res_logs.data:
                     logs_df = pd.DataFrame(res_logs.data)
-                    # Correction fuseau horaire : UTC → Europe/Paris (+1h hiver / +2h été)
                     logs_df['created_at'] = pd.to_datetime(logs_df['created_at'], utc=True).dt.tz_convert("Europe/Paris").dt.strftime('%d/%m/%Y %H:%M')
                     st.dataframe(
                         logs_df[['created_at', 'utilisateur', 'action', 'details']],
