@@ -676,15 +676,19 @@ elif menu == "🔐 Administration":
             choix_adm = st.multiselect("Filtrer par AM (Admin) :", liste_adh, key="adm_filter_am")
             ids_adm = [dict_adh[n] for n in choix_adm] if choix_adm else list(dict_adh.values())
             
-            # Correction : On récupère les données sans le filtre .eq sur la jointure
-            res_raw = supabase.table("inscriptions").select("*, ateliers(*), adherents(nom, prenom)").in_("adherent_id", ids_adm).execute()
-            
-            # Filtre manuel en Python pour ne garder que les inscriptions dont l'atelier est actif
-            data_adm_data = [i for i in res_raw.data if i.get('ateliers') and i['ateliers'].get('est_actif') == True]
-            
+            try:
+                # Requête simplifiée
+                res_raw = supabase.table("inscriptions").select("*, ateliers!inner(*), adherents!inner(nom, prenom)").in_("adherent_id", ids_adm).execute()
+                # Filtrage manuel pour s'assurer que l'atelier est actif
+                data_adm_data = [i for i in res_raw.data if i.get('ateliers') and i['ateliers'].get('est_actif') == True]
+            except Exception as e:
+                st.error(f"Erreur lors de la récupération des données : {e}")
+                data_adm_data = []
+
             data_adm_triee = trier_par_nom_puis_date(data_adm_data) if data_adm_data else []
 
-            if data_adm.data:
+            # Préparation du DataFrame pour l'export
+            if data_adm_data:
                 df_adm = pd.DataFrame([{
                     "AM": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
                     "Date": i['ateliers']['date'],
@@ -700,7 +704,7 @@ elif menu == "🔐 Administration":
             c_e3.download_button("📥 Excel (Admin)", data=export_to_excel(df_adm), file_name="admin_suivi_am.xlsx")
             c_e4.download_button("📥 PDF (Admin)", data=export_suivi_am_pdf("Suivi AM (Administration)", data_adm_triee), file_name="admin_suivi_am.pdf")
 
-            if data_adm.data:
+            if data_adm_data:
                 curr = ""
                 for i in data_adm_triee:
                     nom = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
