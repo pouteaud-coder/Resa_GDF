@@ -474,12 +474,13 @@ elif menu == "📊 Suivi & Récap":
     st.header("🔎 Consultation")
     t1, t2 = st.tabs(["👤 Par Assistante Maternelle", "📅 Par Atelier"])
     with t1:
+        # data_triee initialisé en dehors du if/else pour éviter tout NameError
+        data_triee = []
         if not liste_adh:
             st.info("ℹ️ Aucune assistante maternelle enregistrée.")
         else:
             choix = st.multiselect("Filtrer par assistante maternelle :", liste_adh, key="pub_filter_am")
             ids = [dict_adh[n] for n in choix] if choix else list(dict_adh.values())
-            data_triee = []
             if ids:
                 try:
                     inscriptions_brutes = supabase.table("inscriptions").select("*, ateliers!inner(*), adherents(nom, prenom)").in_("adherent_id", ids).eq("ateliers.est_actif", True).execute().data or []
@@ -494,7 +495,6 @@ elif menu == "📊 Suivi & Récap":
                 except:
                     data_triee = []
 
-        if data_triee:
             df_export = pd.DataFrame([{
                 "Assistante Maternelle": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
                 "Date": i['ateliers']['date_atelier'],
@@ -502,11 +502,8 @@ elif menu == "📊 Suivi & Récap":
                 "Lieu": i['ateliers']['lieu_nom'],
                 "Horaire": i['ateliers']['horaire_lib'],
                 "Nb Enfants": i['nb_enfants']
-            } for i in data_triee])
-        else:
-            df_export = pd.DataFrame(columns=["Assistante Maternelle", "Date", "Atelier", "Lieu", "Horaire", "Nb Enfants"])
+            } for i in data_triee]) if data_triee else pd.DataFrame(columns=["Assistante Maternelle", "Date", "Atelier", "Lieu", "Horaire", "Nb Enfants"])
 
-        if liste_adh:
             c_e1, c_e2 = st.columns(2)
             c_e1.download_button("📥 Excel", data=export_to_excel(df_export), file_name="suivi_am.xlsx")
             c_e2.download_button("📥 PDF", data=export_suivi_am_pdf("Suivi par Assistante Maternelle", data_triee), file_name="suivi_am.pdf")
