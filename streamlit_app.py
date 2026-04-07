@@ -1338,28 +1338,103 @@ elif menu == "🔐 Administration":
                     else:
                         st.warning("Veuillez renseigner le nom et le prénom.")
 
-            if not adh_data:
+            # Chargement de TOUTES les AM (actives + inactives) pour l'admin
+            try:
+                res_adh_admin = supabase.table("adherents").select("*").order("nom").order("prenom").execute()
+                adh_data_admin = res_adh_admin.data if res_adh_admin.data else []
+            except:
+                adh_data_admin = []
+
+            if not adh_data_admin:
                 st.info("ℹ️ Aucune assistante maternelle enregistrée. Utilisez le formulaire ci-dessus pour en ajouter.")
             else:
+                # Compteurs pour l'en-tête
+                nb_actives = sum(1 for u in adh_data_admin if u.get('est_actif', True))
+                nb_inactives = len(adh_data_admin) - nb_actives
                 st.markdown("---")
-                st.markdown("**Liste des AM** — La colonne ⭐ indique le statut animateur (modifiable uniquement par l'admin)")
-                for u in adh_data:
+                st.markdown(
+                    f"**Liste des AM** ({nb_actives} actives, {nb_inactives} inactives) — "
+                    f"⭐ statut animateur · 🟢/🔴 statut adhésion"
+                )
+                for u in adh_data_admin:
                     est_anim = u.get('est_animateur', False)
-                    c1, c_anim, c_edit, c_del = st.columns([0.55, 0.2, 0.13, 0.12])
+                    est_actif_am = u.get('est_actif', True)
+
+                    # Mise en forme visuelle selon statut actif/inactif
+                    style_nom = "color:#9e9e9e; text-decoration:line-through;" if not est_actif_am else ""
+                    badge_inactif = ' <span style="background:#9e9e9e;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;font-weight:bold;">INACTIF</span>' if not est_actif_am else ''
                     anim_label_am = ' <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;font-weight:bold;">ANIMATEUR</span>' if est_anim else ''
-                    c1.markdown(f"**{u['nom']}** {u['prenom']}{anim_label_am}", unsafe_allow_html=True)
-                    # Bouton statut animateur
+
+                    # Colonnes : nom | animateur | actif/inactif | modifier | supprimer
+                    c1, c_anim, c_actif, c_edit, c_del = st.columns([0.45, 0.2, 0.12, 0.12, 0.11])
+                    c1.markdown(
+                        f'<span style="{style_nom}"><strong>{u["nom"]}</strong> {u["prenom"]}</span>{anim_label_am}{badge_inactif}',
+                        unsafe_allow_html=True
+                    )
+
+                    # Bouton toggle statut animateur (désactivé si AM inactive)
                     if est_anim:
-                        if c_anim.button("⭐ Retirer anim.", key=f"am_anim_off_{u['id']}"):
+                        if c_anim.button("⭐ Retirer anim.", key=f"am_anim_off_{u['id']}", disabled=not est_actif_am):
                             supabase.table("adherents").update({"est_animateur": False}).eq("id", u['id']).execute()
                             enregistrer_log("Admin", "Retrait statut animateur", f"{u['prenom']} {u['nom']} n'est plus animateur")
                             st.rerun()
                     else:
-                        if c_anim.button("⭐ Rendre anim.", key=f"am_anim_on_{u['id']}"):
+                        if c_anim.button("⭐ Rendre anim.", key=f"am_anim_on_{u['id']}", disabled=not est_actif_am):
                             supabase.table("adherents").update({"est_animateur": True}).eq("id", u['id']).execute()
                             enregistrer_log("Admin", "Attribution statut animateur", f"{u['prenom']} {u['nom']} devient animateur")
                             st.rerun()
-                    if c_edit.button("✏️ Modifier", key=f"am_edit_{u['id']}"):
+
+                    # Bouton toggle Actif / Inactif
+                    if est_actif_am:
+                        if c_actif.button("🟢 Actif", key=f"am_actif_{u['id']}"):
+                            # Vérifier les inscriptions futures avant désactivation
+                            today_str = str(date.today())
+                            try:
+                                res_ins_futures = supabase.table("inscriptions").select(
+                                    "id, ateliers(date_atelier, titre)"
+                                ).eq("adherent_id", u['id']).execute()
+                                ins_futures = [
+                                    i for i in (res_ins_futures.data or [])
+                                    if i.get('ateliers') and i['ateliers'].get('date_atelier', '') >= today_str
+                                ]
+                            except:
+                                ins_futures = []
+                            if ins_futures:
+                                noms_ateliers = ", ".join([
+                                    f"{format_date_fr_simple(i['ateliers']['date_atelier'])} – {i['ateliers'].get('titre','?')}"
+                                    for i in ins_futures[:3]
+                                ])
+                                st.session_state[f"confirm_desact_{u['id']}"] = {"ins_futures": ins_futures, "noms": noms_ateliers}
+                            else:
+                                supabase.table("adherents").update({"est_actif": False}).eq("id", u['id']).execute()
+                                enregistrer_log("Admin", "Désactivation AM", f"{u['prenom']} {u['nom']} passée en statut inactif")
+                                st.rerun()
+                    else:
+                        if c_actif.button("🔴 Inactif", key=f"am_actif_{u['id']}"):
+                            supabase.table("adherents").update({"est_actif": True}).eq("id", u['id']).execute()
+                            enregistrer_log("Admin", "Réactivation AM", f"{u['prenom']} {u['nom']} passée en statut actif")
+                            st.rerun()
+
+                    # Confirmation désactivation si inscriptions futures détectées
+                    if st.session_state.get(f"confirm_desact_{u['id']}"):
+                        info = st.session_state[f"confirm_desact_{u['id']}"]
+                        nb_ins = len(info["ins_futures"])
+                        st.warning(
+                            f"⚠️ **{u['prenom']} {u['nom']}** a **{nb_ins} inscription(s) à venir** "
+                            f"({info['noms']}{'...' if nb_ins > 3 else ''}). "
+                            f"Elle restera inscrite à ces ateliers. Confirmer la désactivation ?"
+                        )
+                        ca, cb = st.columns(2)
+                        if ca.button("✅ Confirmer quand même", key=f"ok_desact_{u['id']}"):
+                            supabase.table("adherents").update({"est_actif": False}).eq("id", u['id']).execute()
+                            enregistrer_log("Admin", "Désactivation AM (avec inscriptions futures)", f"{u['prenom']} {u['nom']} désactivée ({nb_ins} inscriptions futures conservées)")
+                            del st.session_state[f"confirm_desact_{u['id']}"]
+                            st.rerun()
+                        if cb.button("❌ Annuler", key=f"cancel_desact_{u['id']}"):
+                            del st.session_state[f"confirm_desact_{u['id']}"]
+                            st.rerun()
+
+                    if c_edit.button("✏️", key=f"am_edit_{u['id']}", help="Modifier le nom/prénom"):
                         edit_am_dialog(u['id'], u['nom'], u['prenom'])
                     if c_del.button("🗑️", key=f"am_del_{u['id']}"):
                         secure_delete_dialog("adherents", u['id'], f"{u['prenom']} {u['nom']}", current_code)
