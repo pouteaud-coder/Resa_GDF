@@ -63,6 +63,8 @@ st.markdown("""
     .separateur-atelier { border: 0; border-top: 1px solid #b0d4ff; margin: 15px 0; }
     .container-inscrits { margin-top: -8px; padding-top: 0; margin-bottom: 5px; }
     .liste-inscrits { font-size: 0.95rem !important; color: #1b5e20; margin-left: 20px; display: block; line-height: 1.1; }
+    .animateur-inscrit { font-size: 0.95rem !important; color: #e65100; font-weight: bold; margin-left: 20px; display: block; line-height: 1.1; }
+    .animateur-badge { background-color: #e65100; color: white; padding: 1px 7px; border-radius: 4px; font-size: 0.78rem; font-weight: bold; margin-left: 5px; }
     .nb-enfants-focus { color: #0a3d0a; font-weight: 600; }
     .stButton button { border-radius: 8px !important; background-color: #1b5e20 !important; color: white !important; border: none !important; }
     .stButton button:hover { background-color: #0a3d0a !important; }
@@ -77,6 +79,7 @@ st.markdown("""
     .stError { background-color: #ffdddd; color: #c62828; }
     input, textarea, select { background-color: #ffffff !important; color: #1b5e20 !important; border-color: #1b5e20 !important; }
     .css-1d391kg, .css-1lcbmhc { background-color: #cfe9ff !important; }
+    .bloc-animateur { background-color: #fff3e0; border: 1px solid #e65100; border-radius: 8px; padding: 8px 14px; margin-bottom: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -169,6 +172,98 @@ def trier_par_nom_puis_date(data):
         i['ateliers']['date_atelier']
     ))
 
+# --- FONCTIONS ANIMATEUR ---
+def get_animateur_atelier(at_id):
+    """Retourne les infos de l'animateur d'un atelier (depuis la table ateliers)."""
+    try:
+        res = supabase.table("ateliers").select("animateur_id").eq("id", at_id).execute()
+        if res.data and res.data[0].get('animateur_id'):
+            anim_id = res.data[0]['animateur_id']
+            res_adh = supabase.table("adherents").select("id, nom, prenom").eq("id", anim_id).execute()
+            if res_adh.data:
+                return res_adh.data[0]
+    except:
+        pass
+    return None
+
+def get_inscription_animateur(at_id, animateur_id):
+    """Retourne l'inscription de l'animateur dans la table inscriptions."""
+    try:
+        res = supabase.table("inscriptions").select("*").eq("atelier_id", at_id).eq("adherent_id", animateur_id).execute()
+        if res.data:
+            return res.data[0]
+    except:
+        pass
+    return None
+
+def assigner_animateur(at_id, nouvel_anim_id, nb_enfants, ancien_anim_id=None, auteur="Animateur"):
+    """
+    Assigne un animateur à un atelier :
+    - Supprime l'inscription de l'ancien animateur (s'il existe)
+    - Met à jour animateur_id dans la table ateliers
+    - Crée l'inscription du nouvel animateur
+    """
+    try:
+        # Retirer l'ancien animateur complètement
+        if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
+            supabase.table("inscriptions").delete().eq("atelier_id", at_id).eq("adherent_id", ancien_anim_id).execute()
+
+        # Mettre à jour l'animateur dans l'atelier
+        supabase.table("ateliers").update({"animateur_id": nouvel_anim_id}).eq("id", at_id).execute()
+
+        # Vérifier si une inscription existe déjà pour le nouvel animateur
+        existing = supabase.table("inscriptions").select("id").eq("atelier_id", at_id).eq("adherent_id", nouvel_anim_id).execute()
+        if existing.data:
+            supabase.table("inscriptions").update({"nb_enfants": nb_enfants}).eq("id", existing.data[0]['id']).execute()
+        else:
+            supabase.table("inscriptions").insert({
+                "adherent_id": nouvel_anim_id,
+                "atelier_id": at_id,
+                "nb_enfants": nb_enfants
+            }).execute()
+        enregistrer_log(auteur, "Attribution animateur", f"Animateur ID {nouvel_anim_id} assigné à atelier ID {at_id} ({nb_enfants} enf.)")
+        return True
+    except Exception as e:
+        return str(e)
+
+def retirer_animateur(at_id, anim_id, auteur="Admin"):
+    """Retire l'animateur d'un atelier (supprime inscription + efface animateur_id)."""
+    try:
+        supabase.table("inscriptions").delete().eq("atelier_id", at_id).eq("adherent_id", anim_id).execute()
+        supabase.table("ateliers").update({"animateur_id": None}).eq("id", at_id).execute()
+        enregistrer_log(auteur, "Retrait animateur", f"Animateur retiré de l'atelier ID {at_id}")
+        return True
+    except Exception as e:
+        return str(e)
+
+def afficher_liste_inscrits_avec_animateur(ins_data, animateur_id, mode="simple"):
+    """
+    Affiche la liste des inscrits avec l'animateur en orange en premier.
+    mode = "simple" : texte seul
+    mode = "html" : retourne du HTML pour st.markdown
+    """
+    animateur_ins = None
+    autres_ins = []
+    for i in ins_data:
+        if i['adherent_id'] == animateur_id:
+            animateur_ins = i
+        else:
+            autres_ins.append(i)
+    autres_tries = sorted(autres_ins, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+
+    if mode == "html":
+        html = "<div class='container-inscrits'>"
+        if animateur_ins:
+            n = f"{animateur_ins['adherents']['prenom']} {animateur_ins['adherents']['nom']}"
+            html += f'<span class="animateur-inscrit">⭐ {n} <span class="nb-enfants-focus">({animateur_ins["nb_enfants"]} enfants)</span> <span class="animateur-badge">ANIMATEUR</span></span>'
+        for p in autres_tries:
+            n = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
+            html += f'<span class="liste-inscrits">• {n} <span class="nb-enfants-focus">({p["nb_enfants"]} enfants)</span></span>'
+        html += "</div>"
+        return html
+    else:
+        return animateur_ins, autres_tries
+
 # --- FONCTIONS D'EXPORT ---
 def export_to_excel(df):
     output = io.BytesIO()
@@ -224,7 +319,7 @@ def export_suivi_am_pdf(title, data_triee):
         pdf.cell(0, 6, detail.encode('latin-1', 'replace').decode('latin-1'), ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
-def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn):
+def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateurs_dict=None):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
@@ -252,8 +347,18 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn):
         pdf.set_font("Arial", size=10)
         sous = f"     Horaire : {horaire}  |  AM : {t_ad}  |  Enfants : {t_en}  |  Places restantes : {restantes}"
         pdf.cell(0, 6, sous.encode('latin-1', 'replace').decode('latin-1'), ln=True)
-        ins_tries = sorted(ins_at, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
-        for p in ins_tries:
+        anim_id = a.get('animateur_id')
+        # Animateur en premier
+        anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id), None) if anim_id else None
+        autres = [p for p in ins_at if p['adherent_id'] != anim_id]
+        autres_tries = sorted(autres, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+        if anim_ins:
+            nom_p = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
+            ligne = f"       ★ {nom_p}  ({anim_ins['nb_enfants']} enfant(s)) [ANIMATEUR]"
+            pdf.set_font("Arial", 'B', 10)
+            pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            pdf.set_font("Arial", size=10)
+        for p in autres_tries:
             nom_p = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
             ligne = f"       • {nom_p}  ({p['nb_enfants']} enfant(s))"
             pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
@@ -310,20 +415,17 @@ def super_admin_dialog():
 
 @st.dialog("✏️ Modifier l'atelier")
 def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
-    # --- Garde : vérifier que les listes ne sont pas vides ---
     if not lieux_list:
         st.error("Aucun lieu disponible. Veuillez d'abord créer des lieux dans l'onglet 'Lieux / Horaires'.")
         return
     if not horaires_list:
         st.error("Aucun horaire disponible. Veuillez d'abord créer des horaires dans l'onglet 'Lieux / Horaires'.")
         return
-
     try:
         inscriptions = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", at_id).execute()
         total_occupation = sum([1 + ins['nb_enfants'] for ins in inscriptions.data]) if inscriptions.data else 0
     except:
         total_occupation = 0
-
     lieux_options = [l['nom'] for l in lieux_list]
     horaires_options = [h['libelle'] for h in horaires_list]
     lieu_actuel_nom = next((l['nom'] for l in lieux_list if l['id'] == lieu_id_actuel), lieux_options[0])
@@ -351,6 +453,54 @@ def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, 
             enregistrer_log("Admin", "Modification atelier", f"Atelier ID {at_id} modifié : titre={nouveau_titre}, lieu={nouveau_lieu}, horaire={nouvel_horaire}, capacité={nouvelle_capacite}")
             st.success("Atelier modifié avec succès !")
             st.rerun()
+
+@st.dialog("🎯 Attribuer / Changer l'animateur")
+def dialog_attribuer_animateur(at_id, titre_at, ancien_anim_id, ancien_anim_nom, liste_adh_anim, dict_adh_anim, auteur="Animateur"):
+    st.markdown(f"**Atelier :** {titre_at}")
+    if ancien_anim_nom:
+        st.info(f"Animateur actuel : **{ancien_anim_nom}**")
+    else:
+        st.info("Aucun animateur assigné.")
+    # Liste de tous les animateurs disponibles
+    options_anim = ["Choisir..."] + liste_adh_anim
+    idx_def = 0
+    if ancien_anim_nom and ancien_anim_nom in liste_adh_anim:
+        idx_def = liste_adh_anim.index(ancien_anim_nom) + 1
+    nouvel_anim = st.selectbox("Choisir l'animateur", options_anim, index=idx_def)
+    nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=1)
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Annuler", use_container_width=True):
+            st.rerun()
+    with c2:
+        if st.button("✅ Confirmer", type="primary", use_container_width=True):
+            if nouvel_anim == "Choisir...":
+                st.warning("Veuillez sélectionner un animateur.")
+            else:
+                nouvel_anim_id = dict_adh_anim[nouvel_anim]
+                result = assigner_animateur(at_id, nouvel_anim_id, nb_enf, ancien_anim_id, auteur)
+                if result is True:
+                    st.success(f"✅ {nouvel_anim} assigné(e) comme animateur !")
+                    st.rerun()
+                else:
+                    st.error(f"Erreur : {result}")
+
+@st.dialog("❌ Retirer l'animateur")
+def dialog_retirer_animateur(at_id, titre_at, anim_id, anim_nom, auteur="Admin"):
+    st.warning(f"Voulez-vous retirer **{anim_nom}** de son rôle d'animateur pour l'atelier **{titre_at}** ?")
+    st.write("Son inscription sera également supprimée.")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Annuler", use_container_width=True):
+            st.rerun()
+    with c2:
+        if st.button("Confirmer", type="primary", use_container_width=True):
+            result = retirer_animateur(at_id, anim_id, auteur)
+            if result is True:
+                st.success("Animateur retiré.")
+                st.rerun()
+            else:
+                st.error(f"Erreur : {result}")
 
 # --- INITIALISATION DES RÉFÉRENTIELS EN SESSION ---
 if 'lieux_list' not in st.session_state:
@@ -386,13 +536,147 @@ except:
 dict_adh = {f"{a['prenom']} {a['nom']}": a['id'] for a in adh_data}
 liste_adh = list(dict_adh.keys())
 
-# --- NAVIGATION ---
-menu = st.sidebar.radio("Navigation", ["📝 Inscriptions", "📊 Suivi & Récap", "🔐 Administration"])
+# Listes spécifiques aux animateurs
+adh_animateurs = [a for a in adh_data if a.get('est_animateur', False)]
+dict_adh_anim = {f"{a['prenom']} {a['nom']}": a['id'] for a in adh_animateurs}
+liste_adh_anim = list(dict_adh_anim.keys())
+set_id_animateurs = {a['id'] for a in adh_animateurs}
+
+# --- SIDEBAR : Sélection utilisateur + Navigation ---
+st.sidebar.markdown("### 👤 Qui êtes-vous ?")
+user_connecte = st.sidebar.selectbox("Votre nom :", ["Choisir..."] + liste_adh, key="user_connecte_sidebar")
+
+# Vérifier si l'utilisateur connecté est animateur
+est_animateur_connecte = False
+id_user_connecte = None
+if user_connecte != "Choisir...":
+    id_user_connecte = dict_adh.get(user_connecte)
+    est_animateur_connecte = id_user_connecte in set_id_animateurs
+
+st.sidebar.markdown("---")
+
+# Construction du menu sidebar
+menu_options = ["📝 Inscriptions", "📊 Suivi & Récap", "🔐 Administration"]
+if est_animateur_connecte:
+    menu_options = ["🎯 Animateur"] + menu_options
+
+menu = st.sidebar.radio("Navigation", menu_options)
+
+# ==========================================
+# SECTION 🎯 ANIMATEUR
+# ==========================================
+if menu == "🎯 Animateur":
+    st.header(f"🎯 Espace Animateur — {user_connecte}")
+    st.markdown(f'<div style="background-color:#fff3e0; border:1px solid #e65100; border-radius:8px; padding:10px 16px; margin-bottom:16px; color:#e65100; font-weight:bold;">⭐ Vous êtes connecté(e) en tant qu\'animateur.</div>', unsafe_allow_html=True)
+
+    today_str = str(date.today())
+    try:
+        ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data or []
+    except:
+        ateliers_bruts = []
+
+    lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
+    horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+    ateliers = []
+    for at in ateliers_bruts:
+        at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
+        at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
+        ateliers.append(at)
+
+    if not ateliers:
+        st.info("ℹ️ Aucun atelier à venir.")
+    else:
+        for at in ateliers:
+            anim_id_at = at.get('animateur_id')
+            je_suis_animateur_ici = (anim_id_at == id_user_connecte)
+
+            try:
+                res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
+                ins_data = res_ins.data if res_ins.data else []
+            except:
+                ins_data = []
+
+            total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
+            restantes = at['capacite_max'] - total_occ
+
+            # Trouver le nom de l'animateur actuel
+            anim_nom_at = None
+            if anim_id_at:
+                anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
+                if anim_ins:
+                    anim_nom_at = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
+                else:
+                    # Chercher dans adh_data
+                    anim_adh = next((a for a in adh_data if a['id'] == anim_id_at), None)
+                    if anim_adh:
+                        anim_nom_at = f"{anim_adh['prenom']} {anim_adh['nom']}"
+
+            statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
+            anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
+            titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}{anim_label}"
+
+            with st.expander(titre_label, expanded=je_suis_animateur_ici):
+                at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
+
+                # --- Bloc animateur actuel ---
+                st.markdown("**Animateur de cet atelier :**")
+                if anim_id_at and anim_nom_at:
+                    col_anim1, col_anim2, col_anim3 = st.columns([2, 1, 1])
+                    col_anim1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {anim_nom_at}</span>', unsafe_allow_html=True)
+                    # Modifier nb enfants animateur (uniquement si je suis l'animateur ou un autre animateur)
+                    anim_ins_cur = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
+                    nb_anim_cur = anim_ins_cur['nb_enfants'] if anim_ins_cur else 1
+                    new_nb_anim = col_anim2.number_input("Enf.", 0, 10, int(nb_anim_cur), key=f"anim_nb_{at['id']}", label_visibility="collapsed")
+                    if col_anim2.button("✏️", key=f"anim_mod_nb_{at['id']}"):
+                        if anim_ins_cur:
+                            supabase.table("inscriptions").update({"nb_enfants": new_nb_anim}).eq("id", anim_ins_cur['id']).execute()
+                            enregistrer_log(user_connecte, "Modif nb enfants animateur", f"{anim_nom_at} → {new_nb_anim} enf. - {at_info_log}")
+                            st.rerun()
+                    if col_anim3.button("🔄 Changer", key=f"anim_chg_{at['id']}"):
+                        dialog_attribuer_animateur(at['id'], at['titre'], anim_id_at, anim_nom_at, liste_adh_anim, dict_adh_anim, auteur=user_connecte)
+                else:
+                    col_an1, col_an2 = st.columns([3, 1])
+                    col_an1.write("_Aucun animateur désigné_")
+                    if col_an2.button("🎯 Me désigner / Désigner", key=f"anim_set_{at['id']}"):
+                        dialog_attribuer_animateur(at['id'], at['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur=user_connecte)
+
+                st.markdown("---")
+
+                # --- Liste des inscrits ---
+                if ins_data:
+                    st.markdown("**Inscrits :**")
+                    # Animateur en orange en premier
+                    anim_ligne = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
+                    autres_lignes = [i for i in ins_data if i['adherent_id'] != anim_id_at]
+                    autres_tries = sorted(autres_lignes, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+
+                    if anim_ligne:
+                        n_a = f"{anim_ligne['adherents']['prenom']} {anim_ligne['adherents']['nom']}"
+                        ca1, ca2, ca3, ca4 = st.columns([0.45, 0.18, 0.18, 0.19])
+                        ca1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {n_a} <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                        new_nb_a = ca2.number_input("Enf.", 0, 10, int(anim_ligne['nb_enfants']), key=f"anim_enf_list_{anim_ligne['id']}", label_visibility="collapsed")
+                        if ca3.button("✏️ Modifier", key=f"anim_mod_list_{anim_ligne['id']}"):
+                            supabase.table("inscriptions").update({"nb_enfants": new_nb_a}).eq("id", anim_ligne['id']).execute()
+                            enregistrer_log(user_connecte, "Modification (animateur)", f"{n_a} → {new_nb_a} enfants - {at_info_log}")
+                            st.rerun()
+                        ca4.write("🔒 _Animateur_")
+
+                    for p in autres_tries:
+                        n_f = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
+                        cp1, cp2, cp3, cp4 = st.columns([0.45, 0.18, 0.18, 0.19])
+                        cp1.write(f"• {n_f}")
+                        new_nb = cp2.number_input("Enf.", 0, 10, int(p['nb_enfants']), key=f"anim_nb_p_{p['id']}", label_visibility="collapsed")
+                        if cp3.button("✏️ Modifier", key=f"anim_mod_p_{p['id']}"):
+                            supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
+                            enregistrer_log(user_connecte, "Modification (animateur)", f"{n_f} → {new_nb} enfants - {at_info_log}")
+                            st.rerun()
+                        if cp4.button("🗑️", key=f"anim_del_p_{p['id']}"):
+                            confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, user_connecte)
 
 # ==========================================
 # SECTION 📝 INSCRIPTIONS
 # ==========================================
-if menu == "📝 Inscriptions":
+elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
     if not liste_adh:
         st.info("ℹ️ Aucune assistante maternelle enregistrée pour le moment.")
@@ -401,7 +685,12 @@ if menu == "📝 Inscriptions":
         > 🔐 Administration → 👥 Liste AM → Ajouter une première assistante maternelle.
         """)
     else:
-        user_principal = st.selectbox("👤 Vous êtes :", ["Choisir..."] + liste_adh)
+        # Utiliser la sélection de la sidebar si disponible
+        if user_connecte != "Choisir...":
+            idx_user = liste_adh.index(user_connecte) + 1 if user_connecte in liste_adh else 0
+        else:
+            idx_user = 0
+        user_principal = st.selectbox("👤 Vous êtes :", ["Choisir..."] + liste_adh, index=idx_user)
         if user_principal != "Choisir...":
             today_str = str(date.today())
             try:
@@ -424,6 +713,8 @@ if menu == "📝 Inscriptions":
                         ins_data = res_ins.data if res_ins.data else []
                     except:
                         ins_data = []
+
+                    anim_id_at = at.get('animateur_id')
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                     restantes = at['capacite_max'] - total_occ
                     statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
@@ -432,8 +723,23 @@ if menu == "📝 Inscriptions":
                     with st.expander(titre_label):
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
+
+                        # Affichage des inscrits avec animateur en orange en premier
                         if ins_data:
-                            for i in ins_data:
+                            anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
+                            autres_ins = [i for i in ins_data if i['adherent_id'] != anim_id_at]
+                            autres_tries = sorted(autres_ins, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+
+                            if anim_ins:
+                                n_a = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
+                                if is_verrouille(at):
+                                    st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                                else:
+                                    c_a1, c_a2 = st.columns([0.88, 0.12])
+                                    c_a1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                                    c_a2.write("🔒")
+
+                            for i in autres_tries:
                                 n_f = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
                                 if is_verrouille(at):
                                     st.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
@@ -442,14 +748,21 @@ if menu == "📝 Inscriptions":
                                     c_nom.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
                                     if c_poub.button("🗑️", key=f"del_{i['id']}"):
                                         confirm_unsubscribe_dialog(i['id'], n_f, at_info_log, user_principal)
+
                         if not is_verrouille(at):
                             st.markdown("---")
+                            # Pré-sélection de l'utilisateur courant
                             try: idx_def = (liste_adh.index(user_principal) + 1)
                             except: idx_def = 0
                             c1, c2, c3 = st.columns([2, 1, 1])
                             qui = c1.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
                             nb_e = c2.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
-                            if c3.button("Valider", key=f"v_{at['id']}", type="primary"):
+
+                            # Bloquer si c'est l'animateur
+                            qui_est_anim = (qui != "Choisir..." and dict_adh.get(qui) == anim_id_at)
+                            if qui_est_anim:
+                                st.warning("🔒 Cette personne est l'animateur de cet atelier. Son inscription est gérée automatiquement.")
+                            elif c3.button("Valider", key=f"v_{at['id']}", type="primary"):
                                 if qui != "Choisir...":
                                     id_adh = dict_adh[qui]
                                     existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
@@ -475,7 +788,6 @@ elif menu == "📊 Suivi & Récap":
     st.header("🔎 Consultation")
     t1, t2 = st.tabs(["👤 Par Assistante Maternelle", "📅 Par Atelier"])
     with t1:
-        # data_triee initialisé en dehors du if/else pour éviter tout NameError
         data_triee = []
         if not liste_adh:
             st.info("ℹ️ Aucune assistante maternelle enregistrée.")
@@ -560,15 +872,22 @@ elif menu == "📊 Suivi & Récap":
         if ateliers:
             for index, a in enumerate(ateliers):
                 c_l = get_color(a['lieu_nom'])
+                anim_id_at = a.get('animateur_id')
                 ins_at = cache_ins.get(a['id'], [])
                 t_ad, t_en = len(ins_at), sum([p['nb_enfants'] for p in ins_at])
                 restantes = a['capacite_max'] - (t_ad + t_en)
                 cl_c = "alerte-complet" if restantes <= 0 else ""
                 st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
                 if ins_at:
-                    ins_s = sorted(ins_at, key=lambda x: (x['adherents']['nom'], x['adherents']['prenom']))
+                    # Animateur en orange en premier
+                    anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
+                    autres = [p for p in ins_at if p['adherent_id'] != anim_id_at]
+                    autres_tries = sorted(autres, key=lambda x: (x['adherents']['nom'], x['adherents']['prenom']))
                     html = "<div class='container-inscrits'>"
-                    for p in ins_s:
+                    if anim_ins:
+                        n_a = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
+                        html += f'<span class="animateur-inscrit">⭐ {n_a} <span class="nb-enfants-focus">({anim_ins["nb_enfants"]} enfants)</span> <span class="animateur-badge">ANIMATEUR</span></span>'
+                    for p in autres_tries:
                         html += f'<span class="liste-inscrits">• {p["adherents"]["prenom"]} {p["adherents"]["nom"]} <span class="nb-enfants-focus">({p["nb_enfants"]} enfants)</span></span>'
                     st.markdown(html + "</div>", unsafe_allow_html=True)
                 if index < len(ateliers) - 1:
@@ -589,6 +908,7 @@ elif menu == "🔐 Administration":
             "📈 Statistiques de participation", "👥 Liste AM",
             "📍 Lieux / Horaires", "⚙️ Sécurité", "📜 Journal des actions"
         ])
+
         with t1: # ATELIERS
             refresh_referentials()
             l_raw = st.session_state.lieux_list
@@ -713,8 +1033,15 @@ elif menu == "🔐 Administration":
                         if ft == "Actifs" and not a['est_actif']: continue
                         if ft == "Inactifs" and a['est_actif']: continue
                         verrou_icon = " 🔒" if is_verrouille(a) else ""
-                        ca, cb, cc, cd, ce = st.columns([0.5, 0.12, 0.12, 0.12, 0.14])
-                        ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}")
+                        anim_id_at = a.get('animateur_id')
+                        anim_nom_rep = None
+                        if anim_id_at:
+                            anim_adh = next((x for x in adh_data if x['id'] == anim_id_at), None)
+                            if anim_adh:
+                                anim_nom_rep = f"{anim_adh['prenom']} {anim_adh['nom']}"
+                        anim_label_rep = f" | ⭐ {anim_nom_rep}" if anim_nom_rep else ""
+                        ca, cb, cc, cd, ce, cf_anim = st.columns([0.42, 0.1, 0.1, 0.1, 0.1, 0.18])
+                        ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}{anim_label_rep}")
                         btn_l = "🔴 Désactiver" if a['est_actif'] else "🟢 Activer"
                         if cb.button(btn_l, key=f"at_stat_{a['id']}"):
                             supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute(); st.rerun()
@@ -733,6 +1060,13 @@ elif menu == "🔐 Administration":
                             except:
                                 cnt = 0
                             delete_atelier_dialog(a['id'], a['titre'], cnt > 0, current_code)
+                        # Bouton animateur admin
+                        if anim_nom_rep:
+                            if cf_anim.button("⭐ Changer anim.", key=f"at_anim_chg_{a['id']}"):
+                                dialog_attribuer_animateur(a['id'], a['titre'], anim_id_at, anim_nom_rep, liste_adh_anim, dict_adh_anim, auteur="Admin")
+                        else:
+                            if cf_anim.button("⭐ Assigner anim.", key=f"at_anim_set_{a['id']}"):
+                                dialog_attribuer_animateur(a['id'], a['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur="Admin")
 
             elif sub == "Actions groupées":
                 with st.form("bulk_form"):
@@ -836,26 +1170,54 @@ elif menu == "🔐 Administration":
             if ateliers:
                 for index, a in enumerate(ateliers):
                     c_l = get_color(a['lieu_nom'])
+                    anim_id_at = a.get('animateur_id')
                     ins_at = cache_ins_adm.get(a['id'], [])
                     t_ad, t_en = len(ins_at), sum([p['nb_enfants'] for p in ins_at])
                     restantes = a['capacite_max'] - (t_ad + t_en)
                     cl_c = "alerte-complet" if restantes <= 0 else ""
                     verrou_icon = " 🔒" if is_verrouille(a) else ""
                     at_info_log = f"{a['date_atelier']} | {a['horaire_lib']} | {a['lieu_nom']}"
-                    st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
+
+                    # Nom animateur
+                    anim_nom_plan = None
+                    if anim_id_at:
+                        anim_adh_plan = next((x for x in adh_data if x['id'] == anim_id_at), None)
+                        if anim_adh_plan:
+                            anim_nom_plan = f"{anim_adh_plan['prenom']} {anim_adh_plan['nom']}"
+                    anim_label_plan = f" | ⭐ {anim_nom_plan}" if anim_nom_plan else ""
+
+                    st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
+
                     if ins_at:
-                        ins_s = sorted(ins_at, key=lambda x: (x['adherents']['nom'], x['adherents']['prenom']))
-                        for p in ins_s:
+                        # Animateur en orange en premier
+                        anim_ins_plan = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
+                        autres_plan = [p for p in ins_at if p['adherent_id'] != anim_id_at]
+                        autres_plan_tries = sorted(autres_plan, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+
+                        if anim_ins_plan:
+                            n_a = f"{anim_ins_plan['adherents']['prenom']} {anim_ins_plan['adherents']['nom']}"
+                            ca1, ca2, ca3, ca4 = st.columns([0.42, 0.18, 0.18, 0.22])
+                            ca1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                            new_nb_a = ca2.number_input("Enf.", 0, 10, int(anim_ins_plan['nb_enfants']), key=f"adm_anim_nb_{anim_ins_plan['id']}", label_visibility="collapsed")
+                            if ca3.button("✏️ Modifier", key=f"adm_anim_mod_{anim_ins_plan['id']}"):
+                                supabase.table("inscriptions").update({"nb_enfants": new_nb_a}).eq("id", anim_ins_plan['id']).execute()
+                                enregistrer_log("Admin", "Modification nb enf. animateur", f"{n_a} → {new_nb_a} enf. - {at_info_log}")
+                                st.rerun()
+                            if ca4.button("❌ Retirer anim.", key=f"adm_anim_del_{a['id']}"):
+                                dialog_retirer_animateur(a['id'], a['titre'], anim_id_at, n_a, "Admin")
+
+                        for p in autres_plan_tries:
                             n_f = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
-                            cp1, cp2, cp3, cp4 = st.columns([0.45, 0.2, 0.2, 0.15])
+                            cp1, cp2, cp3, cp4 = st.columns([0.45, 0.18, 0.18, 0.19])
                             cp1.write(f"• {n_f}")
-                            new_nb = cp2.number_input("Enf.", 1, 10, int(p['nb_enfants']), key=f"adm_nb_{p['id']}", label_visibility="collapsed")
+                            new_nb = cp2.number_input("Enf.", 0, 10, int(p['nb_enfants']), key=f"adm_nb_{p['id']}", label_visibility="collapsed")
                             if cp3.button("✏️ Modifier", key=f"adm_mod_{p['id']}"):
                                 supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
                                 enregistrer_log("Admin", "Modification (admin)", f"{n_f} → {new_nb} enfants - {at_info_log}")
                                 st.rerun()
                             if cp4.button("🗑️", key=f"adm_del_plan_{p['id']}"):
                                 confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, "Admin")
+
                     with st.expander(f"➕ Inscrire une AM à cet atelier", expanded=False):
                         if not liste_adh:
                             st.info("Aucune AM enregistrée.")
@@ -863,7 +1225,10 @@ elif menu == "🔐 Administration":
                             ca1, ca2, ca3 = st.columns([2, 1, 1])
                             qui_adm = ca1.selectbox("AM à inscrire", ["Choisir..."] + liste_adh, key=f"adm_qui_{a['id']}")
                             nb_adm = ca2.number_input("Enfants", 1, 10, 1, key=f"adm_enf_{a['id']}")
-                            if ca3.button("✅ Inscrire", key=f"adm_ins_{a['id']}", type="primary"):
+                            qui_est_anim_adm = (qui_adm != "Choisir..." and dict_adh.get(qui_adm) == anim_id_at)
+                            if qui_est_anim_adm:
+                                st.warning("🔒 Cette personne est l'animateur de cet atelier.")
+                            elif ca3.button("✅ Inscrire", key=f"adm_ins_{a['id']}", type="primary"):
                                 if qui_adm != "Choisir...":
                                     id_adh = dict_adh[qui_adm]
                                     existing = next((ins for ins in ins_at if ins['adherent_id'] == id_adh), None)
@@ -955,6 +1320,9 @@ elif menu == "🔐 Administration":
                         st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu_nom']} - {at['horaire_lib']})")
 
         with t5: # 👥 LISTE AM
+            st.subheader("👥 Gestion des Assistantes Maternelles")
+
+            # Formulaire d'ajout
             with st.form("add_am"):
                 c1, c2 = st.columns(2)
                 nom = c1.text_input("Nom").upper().strip()
@@ -962,19 +1330,35 @@ elif menu == "🔐 Administration":
                 if st.form_submit_button("➕ Ajouter"):
                     if nom and pre:
                         try:
-                            supabase.table("adherents").insert({"nom": nom, "prenom": pre, "est_actif": True}).execute()
+                            supabase.table("adherents").insert({"nom": nom, "prenom": pre, "est_actif": True, "est_animateur": False}).execute()
                             st.success(f"✅ {pre} {nom} ajouté(e) avec succès !")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erreur lors de l'ajout : {str(e)}")
                     else:
                         st.warning("Veuillez renseigner le nom et le prénom.")
+
             if not adh_data:
                 st.info("ℹ️ Aucune assistante maternelle enregistrée. Utilisez le formulaire ci-dessus pour en ajouter.")
             else:
+                st.markdown("---")
+                st.markdown("**Liste des AM** — La colonne ⭐ indique le statut animateur (modifiable uniquement par l'admin)")
                 for u in adh_data:
-                    c1, c_edit, c_del = st.columns([0.7, 0.15, 0.15])
-                    c1.write(f"**{u['nom']}** {u['prenom']}")
+                    est_anim = u.get('est_animateur', False)
+                    c1, c_anim, c_edit, c_del = st.columns([0.55, 0.2, 0.13, 0.12])
+                    anim_label_am = ' <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;font-weight:bold;">ANIMATEUR</span>' if est_anim else ''
+                    c1.markdown(f"**{u['nom']}** {u['prenom']}{anim_label_am}", unsafe_allow_html=True)
+                    # Bouton statut animateur
+                    if est_anim:
+                        if c_anim.button("⭐ Retirer anim.", key=f"am_anim_off_{u['id']}"):
+                            supabase.table("adherents").update({"est_animateur": False}).eq("id", u['id']).execute()
+                            enregistrer_log("Admin", "Retrait statut animateur", f"{u['prenom']} {u['nom']} n'est plus animateur")
+                            st.rerun()
+                    else:
+                        if c_anim.button("⭐ Rendre anim.", key=f"am_anim_on_{u['id']}"):
+                            supabase.table("adherents").update({"est_animateur": True}).eq("id", u['id']).execute()
+                            enregistrer_log("Admin", "Attribution statut animateur", f"{u['prenom']} {u['nom']} devient animateur")
+                            st.rerun()
                     if c_edit.button("✏️ Modifier", key=f"am_edit_{u['id']}"):
                         edit_am_dialog(u['id'], u['nom'], u['prenom'])
                     if c_del.button("🗑️", key=f"am_del_{u['id']}"):
