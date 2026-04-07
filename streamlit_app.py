@@ -510,11 +510,16 @@ if 'horaires_list' not in st.session_state:
 
 def refresh_referentials():
     try:
-        st.session_state.lieux_list = supabase.table("lieux").select("*").eq("est_actif", True).order("nom").execute().data or []
+        res_lieux = supabase.table("lieux").select("*").order("nom").execute()
+        all_lieux = res_lieux.data or []
+        # Filtre côté Python pour éviter les problèmes de cache schema Supabase
+        st.session_state.lieux_list = [l for l in all_lieux if l.get("est_actif", True) is not False]
     except:
         st.session_state.lieux_list = []
     try:
-        st.session_state.horaires_list = supabase.table("horaires").select("*").eq("est_actif", True).execute().data or []
+        res_hor = supabase.table("horaires").select("*").execute()
+        all_hor = res_hor.data or []
+        st.session_state.horaires_list = [h for h in all_hor if h.get("est_actif", True) is not False]
     except:
         st.session_state.horaires_list = []
 
@@ -1460,7 +1465,7 @@ elif menu == "🔐 Administration":
                     if st.form_submit_button("Ajouter"):
                         if nl.strip():
                             try:
-                                supabase.table("lieux").insert({"nom": nl.strip(), "capacite_accueil": cp, "est_actif": True}).execute()
+                                supabase.table("lieux").insert({"nom": nl.strip(), "capacite_accueil": cp}).execute()
                                 refresh_referentials()
                                 st.success(f"✅ Lieu '{nl.strip()}' ajouté.")
                                 st.rerun()
@@ -1483,7 +1488,7 @@ elif menu == "🔐 Administration":
                     if st.form_submit_button("Ajouter"):
                         if nh.strip():
                             try:
-                                supabase.table("horaires").insert({"libelle": nh.strip(), "est_actif": True}).execute()
+                                supabase.table("horaires").insert({"libelle": nh.strip()}).execute()
                                 refresh_referentials()
                                 st.success(f"✅ Horaire '{nh.strip()}' ajouté.")
                                 st.rerun()
