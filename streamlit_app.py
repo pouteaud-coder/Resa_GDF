@@ -77,7 +77,7 @@ st.markdown("""
     .stAlert { background-color: #cfe9ff; border-left-color: #1b5e20; color: #1b5e20; }
     .stSuccess { background-color: #d0e8d0; color: #0a3d0a; }
     .stError { background-color: #ffdddd; color: #c62828; }
-    input, textarea, select { background-color: #ffffff !important; color: #fff3e0 !important; border-color: #1b5e20 !important; }
+    input, textarea, select { background-color: #ffffff !important; color: #1b5e20 !important; border-color: #1b5e20 !important; }
     .css-1d391kg, .css-1lcbmhc { background-color: #cfe9ff !important; }
     .bloc-animateur { background-color: #fff3e0; border: 1px solid #e65100; border-radius: 8px; padding: 8px 14px; margin-bottom: 8px; }
     </style>
@@ -946,10 +946,17 @@ elif menu == "📊 Suivi & Récap":
 # SECTION 🔐 ADMINISTRATION
 # ==========================================
 elif menu == "🔐 Administration":
-    c_login1, c_login2 = st.columns([0.7, 0.3])
-    pw = c_login1.text_input("Code secret admin", type="password")
-    if c_login2.button("🔑 Code Super Admin"): super_admin_dialog()
-    if pw == current_code or st.session_state['super_access']:
+     # Zone de connexion avec bouton Valider
+     col_left, col_right = st.columns([0.7, 0.3])
+     with col_left:
+        with st.form("admin_login_form"):
+             pw = st.text_input("Code secret admin", type="password")
+             submitted = st.form_submit_button("✅ Valider", type="primary", use_container_width=True)
+     with col_right:
+         if st.button("🔑 Code Super Admin", use_container_width=True):
+             super_admin_dialog()
+
+if (submitted and pw == current_code) or st.session_state.get('super_access', False):
         t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs([
             "🏗️ Ateliers", "📊 Suivi AM", "📅 Planning Ateliers",
             "📈 Statistiques de participation", "👥 Liste AM",
