@@ -163,7 +163,7 @@ def parse_date_fr_to_iso(date_str):
     return clean
 
 def is_verrouille(at):
-    return bool(at.get("Verrouille", at.get("verrouille", False)))
+    return bool(at.get("est_verrouille", False))
 
 def trier_par_nom_puis_date(data):
     return sorted(data, key=lambda i: (
@@ -920,7 +920,7 @@ elif menu == "🔐 Administration":
             h_raw = st.session_state.horaires_list
             l_list = [l['nom'] for l in l_raw]
             h_list = [h['libelle'] for h in h_raw]
-            map_l_cap = {l['nom']: l.get('capacite_accueil', 10) for l in l_raw}
+            map_l_cap = {l['nom']: l.get('capacite', 10) for l in l_raw}
             map_l_id = {l['nom']: l['id'] for l in l_raw}
             map_h_id = {h['libelle']: h['id'] for h in h_raw}
 
@@ -1002,7 +1002,7 @@ elif menu == "🔐 Administration":
                                     "horaire_id": map_h_id[horaire_lib],
                                     "capacite_max": int(r['Capacité']),
                                     "est_actif": bool(r['Actif']),
-                                    "Verrouille": bool(r.get("Verrouillé", False))
+                                    "est_verrouille": bool(r.get("Verrouillé", False))
                                 })
                             if to_db:
                                 try:
@@ -1053,7 +1053,7 @@ elif menu == "🔐 Administration":
                         btn_v = "🔓 Déverrouiller" if is_verrouille(a) else "🔒 Verrouiller"
                         if cc.button(btn_v, key=f"at_verr_{a['id']}"):
                             nouvel_etat = not is_verrouille(a)
-                            supabase.table("ateliers").update({"Verrouille": bool(nouvel_etat)}).eq("id", a['id']).execute()
+                            supabase.table("ateliers").update({"est_verrouille": bool(nouvel_etat)}).eq("id", a['id']).execute()
                             etat_str = "verrouillé" if nouvel_etat else "déverrouillé"
                             enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date_atelier']} {etat_str}")
                             st.rerun()
@@ -1456,7 +1456,7 @@ elif menu == "🔐 Administration":
                 else:
                     for l in l_raw:
                         ca, cb = st.columns([0.8, 0.2])
-                        ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l['nom'])}'>{l['nom']} (Cap: {l['capacite_accueil']})</span>", unsafe_allow_html=True)
+                        ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l['nom'])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
                         if cb.button("🗑️", key=f"lx_{l['id']}"):
                             secure_delete_dialog("lieux", l['id'], l['nom'], current_code)
                 with st.form("add_lx"):
@@ -1465,7 +1465,7 @@ elif menu == "🔐 Administration":
                     if st.form_submit_button("Ajouter"):
                         if nl.strip():
                             try:
-                                supabase.table("lieux").insert({"nom": nl.strip(), "capacite_accueil": cp}).execute()
+                                supabase.table("lieux").insert({"nom": nl.strip(), "capacite": cp}).execute()
                                 refresh_referentials()
                                 st.success(f"✅ Lieu '{nl.strip()}' ajouté.")
                                 st.rerun()
