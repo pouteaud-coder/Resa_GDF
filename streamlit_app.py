@@ -946,17 +946,16 @@ elif menu == "📊 Suivi & Récap":
 # SECTION 🔐 ADMINISTRATION
 # ==========================================
 elif menu == "🔐 Administration":
-     # Zone de connexion avec bouton Valider
-     col_left, col_right = st.columns([0.7, 0.3])
-     with col_left:
+    col_left, col_right = st.columns([0.7, 0.3])
+    with col_left:
         with st.form("admin_login_form"):
-             pw = st.text_input("Code secret admin", type="password")
-             submitted = st.form_submit_button("✅ Valider", type="primary", use_container_width=True)
-     with col_right:
-         if st.button("🔑 Code Super Admin", use_container_width=True):
-             super_admin_dialog()
+            pw = st.text_input("Code secret admin", type="password")
+            submitted = st.form_submit_button("✅ Valider", type="primary", use_container_width=True)
+    with col_right:
+        if st.button("🔑 Code Super Admin", use_container_width=True):
+            super_admin_dialog()
 
-if (submitted and pw == current_code) or st.session_state.get('super_access', False):
+    if (submitted and pw == current_code) or st.session_state.get('super_access', False):
         t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs([
             "🏗️ Ateliers", "📊 Suivi AM", "📅 Planning Ateliers",
             "📈 Statistiques de participation", "👥 Liste AM",
@@ -1114,7 +1113,6 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                             except:
                                 cnt = 0
                             delete_atelier_dialog(a['id'], a['titre'], cnt > 0, current_code)
-                        # Bouton animateur admin
                         if anim_nom_rep:
                             if cf_anim.button("⭐ Changer anim.", key=f"at_anim_chg_{a['id']}"):
                                 dialog_attribuer_animateur(a['id'], a['titre'], anim_id_at, anim_nom_rep, liste_adh_anim, dict_adh_anim, auteur="Admin")
@@ -1232,7 +1230,6 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                     verrou_icon = " 🔒" if is_verrouille(a) else ""
                     at_info_log = f"{a['date_atelier']} | {a['horaire_lib']} | {a['lieu_nom']}"
 
-                    # Nom animateur
                     anim_nom_plan = None
                     if anim_id_at:
                         anim_adh_plan = next((x for x in adh_data if x['id'] == anim_id_at), None)
@@ -1243,7 +1240,6 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                     st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
 
                     if ins_at:
-                        # Animateur en orange en premier
                         anim_ins_plan = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
                         autres_plan = [p for p in ins_at if p['adherent_id'] != anim_id_at]
                         autres_plan_tries = sorted(autres_plan, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
@@ -1376,7 +1372,6 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
         with t5: # 👥 LISTE AM
             st.subheader("👥 Gestion des Assistantes Maternelles")
 
-            # Formulaire d'ajout
             with st.form("add_am"):
                 c1, c2 = st.columns(2)
                 nom = c1.text_input("Nom").upper().strip()
@@ -1392,7 +1387,6 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                     else:
                         st.warning("Veuillez renseigner le nom et le prénom.")
 
-            # Chargement de TOUTES les AM (actives + inactives) pour l'admin
             try:
                 res_adh_admin = supabase.table("adherents").select("*").order("nom").order("prenom").execute()
                 adh_data_admin = res_adh_admin.data if res_adh_admin.data else []
@@ -1402,7 +1396,6 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
             if not adh_data_admin:
                 st.info("ℹ️ Aucune assistante maternelle enregistrée. Utilisez le formulaire ci-dessus pour en ajouter.")
             else:
-                # Compteurs pour l'en-tête
                 nb_actives = sum(1 for u in adh_data_admin if u.get('est_actif', True))
                 nb_inactives = len(adh_data_admin) - nb_actives
                 st.markdown("---")
@@ -1414,19 +1407,16 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                     est_anim = u.get('est_animateur', False)
                     est_actif_am = u.get('est_actif', True)
 
-                    # Mise en forme visuelle selon statut actif/inactif
                     style_nom = "color:#9e9e9e; text-decoration:line-through;" if not est_actif_am else ""
                     badge_inactif = ' <span style="background:#9e9e9e;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;font-weight:bold;">INACTIF</span>' if not est_actif_am else ''
                     anim_label_am = ' <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;font-weight:bold;">ANIMATEUR</span>' if est_anim else ''
 
-                    # Colonnes : nom | animateur | actif/inactif | modifier | supprimer
                     c1, c_anim, c_actif, c_edit, c_del = st.columns([0.45, 0.2, 0.12, 0.12, 0.11])
                     c1.markdown(
                         f'<span style="{style_nom}"><strong>{u["nom"]}</strong> {u["prenom"]}</span>{anim_label_am}{badge_inactif}',
                         unsafe_allow_html=True
                     )
 
-                    # Bouton toggle statut animateur (désactivé si AM inactive)
                     if est_anim:
                         if c_anim.button("⭐ Retirer anim.", key=f"am_anim_off_{u['id']}", disabled=not est_actif_am):
                             supabase.table("adherents").update({"est_animateur": False}).eq("id", u['id']).execute()
@@ -1438,10 +1428,8 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                             enregistrer_log("Admin", "Attribution statut animateur", f"{u['prenom']} {u['nom']} devient animateur")
                             st.rerun()
 
-                    # Bouton toggle Actif / Inactif
                     if est_actif_am:
                         if c_actif.button("🟢 Actif", key=f"am_actif_{u['id']}"):
-                            # Vérifier les inscriptions futures avant désactivation
                             today_str = str(date.today())
                             try:
                                 res_ins_futures = supabase.table("inscriptions").select(
@@ -1469,7 +1457,6 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                             enregistrer_log("Admin", "Réactivation AM", f"{u['prenom']} {u['nom']} passée en statut actif")
                             st.rerun()
 
-                    # Confirmation désactivation si inscriptions futures détectées
                     if st.session_state.get(f"confirm_desact_{u['id']}"):
                         info = st.session_state[f"confirm_desact_{u['id']}"]
                         nb_ins = len(info["ins_futures"])
@@ -1505,11 +1492,10 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                 else:
                     for l in l_raw:
                         ca, cb_edit, cb_del = st.columns([0.65, 0.18, 0.17])
-                        ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l["nom"])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
+                        ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l['nom'])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
                         if cb_edit.button("✏️", key=f"lx_edit_{l['id']}", help="Modifier"):
                             edit_lieu_dialog(l['id'], l['nom'], l['capacite'])
                         if cb_del.button("🗑️", key=f"lx_{l['id']}", help="Supprimer"):
-                            # Suppression réelle pour éviter le problème de doublon sur nom unique
                             try:
                                 supabase.table("lieux").delete().eq("id", l['id']).execute()
                                 st.rerun()
@@ -1521,11 +1507,9 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                     if st.form_submit_button("Ajouter"):
                         if nl.strip():
                             nom_upper = nl.strip().upper()
-                            # Vérifier si le lieu existe déjà (actif ou inactif)
                             try:
                                 existing = supabase.table("lieux").select("id, est_actif").eq("nom", nom_upper).execute()
                                 if existing.data:
-                                    # Réactiver si inactif
                                     supabase.table("lieux").update({"est_actif": True, "capacite": cp}).eq("nom", nom_upper).execute()
                                     st.success(f"✅ Lieu '{nom_upper}' réactivé.")
                                 else:
@@ -1607,5 +1591,6 @@ if (submitted and pw == current_code) or st.session_state.get('super_access', Fa
                     st.info("Aucune action enregistrée pour cette période.")
             except Exception as e:
                 st.info("ℹ️ Le journal des actions sera disponible une fois que des opérations auront été effectuées.")
+
     else:
         st.info("Saisissez le code secret pour accéder aux fonctions d'administration.")
