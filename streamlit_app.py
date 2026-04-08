@@ -85,9 +85,13 @@ st.markdown("""
 
 # --- FONCTIONS UTILITAIRES ---
 def get_color(nom_lieu):
-    colors = ["#2e7d32", "#1b5e20", "#0a3d0a", "#1565c0", "#1976d2", "#0d47a1"]
+    colors = [
+        "#2e7d32", "#1565c0", "#6a1b9a", "#c62828", "#e65100",
+        "#00695c", "#4527a0", "#ad1457", "#558b2f", "#0277bd",
+        "#4e342e", "#37474f", "#f9a825", "#0d47a1", "#1b5e20"
+    ]
     hash_object = hashlib.md5(str(nom_lieu).upper().strip().encode())
-    hue = int(hash_object.hexdigest()[:6], 16) % len(colors)
+    hue = int(hash_object.hexdigest()[:8], 16) % len(colors)
     return colors[hue]
 
 def get_secret_code():
@@ -501,6 +505,44 @@ def dialog_retirer_animateur(at_id, titre_at, anim_id, anim_nom, auteur="Admin")
                 st.rerun()
             else:
                 st.error(f"Erreur : {result}")
+
+
+@st.dialog("✏️ Modifier un lieu")
+def edit_lieu_dialog(lieu_id, nom_actuel, capacite_actuelle):
+    new_nom = st.text_input("Nom du lieu", value=nom_actuel).strip()
+    new_cap = st.number_input("Capacité", min_value=1, max_value=50, value=int(capacite_actuelle))
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Annuler", use_container_width=True): st.rerun()
+    with c2:
+        if st.button("Enregistrer", type="primary", use_container_width=True):
+            if not new_nom:
+                st.error("Le nom ne peut pas être vide.")
+            else:
+                try:
+                    supabase.table("lieux").update({"nom": new_nom.upper(), "capacite": new_cap}).eq("id", lieu_id).execute()
+                    st.success("Lieu modifié !")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur : {str(e)}")
+
+@st.dialog("✏️ Modifier un horaire")
+def edit_horaire_dialog(horaire_id, libelle_actuel):
+    new_lib = st.text_input("Horaire", value=libelle_actuel).strip()
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Annuler", use_container_width=True): st.rerun()
+    with c2:
+        if st.button("Enregistrer", type="primary", use_container_width=True):
+            if not new_lib:
+                st.error("L'horaire ne peut pas être vide.")
+            else:
+                try:
+                    supabase.table("horaires").update({"libelle": new_lib}).eq("id", horaire_id).execute()
+                    st.success("Horaire modifié !")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur : {str(e)}")
 
 # --- INITIALISATION DES RÉFÉRENTIELS EN SESSION ---
 if 'lieux_list' not in st.session_state:
@@ -1455,19 +1497,34 @@ elif menu == "🔐 Administration":
                     st.info("ℹ️ Aucun lieu enregistré. Utilisez le formulaire ci-dessous pour en ajouter.")
                 else:
                     for l in l_raw:
-                        ca, cb = st.columns([0.8, 0.2])
-                        ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l['nom'])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
-                        if cb.button("🗑️", key=f"lx_{l['id']}"):
-                            secure_delete_dialog("lieux", l['id'], l['nom'], current_code)
+                        ca, cb_edit, cb_del = st.columns([0.65, 0.18, 0.17])
+                        ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l["nom"])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
+                        if cb_edit.button("✏️", key=f"lx_edit_{l['id']}", help="Modifier"):
+                            edit_lieu_dialog(l['id'], l['nom'], l['capacite'])
+                        if cb_del.button("🗑️", key=f"lx_{l['id']}", help="Supprimer"):
+                            # Suppression réelle pour éviter le problème de doublon sur nom unique
+                            try:
+                                supabase.table("lieux").delete().eq("id", l['id']).execute()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erreur suppression : {str(e)}")
                 with st.form("add_lx"):
                     nl = st.text_input("Nouveau Lieu")
                     cp = st.number_input("Capacité", 1, 50, 10)
                     if st.form_submit_button("Ajouter"):
                         if nl.strip():
+                            nom_upper = nl.strip().upper()
+                            # Vérifier si le lieu existe déjà (actif ou inactif)
                             try:
-                                supabase.table("lieux").insert({"nom": nl.strip(), "capacite": cp}).execute()
+                                existing = supabase.table("lieux").select("id, est_actif").eq("nom", nom_upper).execute()
+                                if existing.data:
+                                    # Réactiver si inactif
+                                    supabase.table("lieux").update({"est_actif": True, "capacite": cp}).eq("nom", nom_upper).execute()
+                                    st.success(f"✅ Lieu '{nom_upper}' réactivé.")
+                                else:
+                                    supabase.table("lieux").insert({"nom": nom_upper, "capacite": cp}).execute()
+                                    st.success(f"✅ Lieu '{nom_upper}' ajouté.")
                                 refresh_referentials()
-                                st.success(f"✅ Lieu '{nl.strip()}' ajouté.")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Erreur : {str(e)}")
@@ -1479,9 +1536,11 @@ elif menu == "🔐 Administration":
                     st.info("ℹ️ Aucun horaire enregistré. Utilisez le formulaire ci-dessous pour en ajouter.")
                 else:
                     for h in h_raw:
-                        cc, cd = st.columns([0.8, 0.2])
+                        cc, cd_edit, cd_del = st.columns([0.65, 0.18, 0.17])
                         cc.write(f"• {h['libelle']}")
-                        if cd.button("🗑️", key=f"hx_{h['id']}"):
+                        if cd_edit.button("✏️", key=f"hx_edit_{h['id']}", help="Modifier"):
+                            edit_horaire_dialog(h['id'], h['libelle'])
+                        if cd_del.button("🗑️", key=f"hx_{h['id']}", help="Supprimer"):
                             secure_delete_dialog("horaires", h['id'], h['libelle'], current_code)
                 with st.form("add_hx"):
                     nh = st.text_input("Nouvel Horaire (ex: '09:00-11:00')")
