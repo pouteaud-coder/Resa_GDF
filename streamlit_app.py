@@ -77,7 +77,7 @@ st.markdown("""
     .stAlert { background-color: #cfe9ff; border-left-color: #1b5e20; color: #1b5e20; }
     .stSuccess { background-color: #d0e8d0; color: #0a3d0a; }
     .stError { background-color: #ffdddd; color: #c62828; }
-    input, textarea, select { background-color: #ffffff !important; color: #1b5e20 !important; border-color: #1b5e20 !important; }
+    input, textarea, select { background-color: #ffffff !important; color: #1b5e20 !important; border-color: #b2d8d8 !important; }
     .css-1d391kg, .css-1lcbmhc { background-color: #cfe9ff !important; }
     .bloc-animateur { background-color: #fff3e0; border: 1px solid #e65100; border-radius: 8px; padding: 8px 14px; margin-bottom: 8px; }
     </style>
