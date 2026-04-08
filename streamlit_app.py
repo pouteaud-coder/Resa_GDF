@@ -66,9 +66,9 @@ st.markdown("""
     .animateur-inscrit { font-size: 0.95rem !important; color: #e65100; font-weight: bold; margin-left: 20px; display: block; line-height: 1.1; }
     .animateur-badge { background-color: #e65100; color: white; padding: 1px 7px; border-radius: 4px; font-size: 0.78rem; font-weight: bold; margin-left: 5px; }
     .nb-enfants-focus { color: #0a3d0a; font-weight: 600; }
-    .stButton button { border-radius: 8px !important; background-color: #b2d8d8 !important; color: white !important; border: 0.5px solid #b2d8d8 !important; }
+    .stButton button { border-radius: 12px !important; background-color: #b2d8d8 !important; color: white !important; border: 0.5px solid #b2d8d8 !important; }
     .stButton button:hover { background-color: #0a3d0a !important; }
-    .badge-verrouille { background-color: #1b5e20; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
+    .badge-verrouille { background-color: #b2d8d8; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p { color: #1b5e20 !important; }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
     .stTabs [data-baseweb="tab"] { background-color: #e6f4ff; border-radius: 20px !important; padding: 6px 18px; color: #1b5e20; border: 1px solid #a8cfe8 !important; font-size: 0.9rem; }
