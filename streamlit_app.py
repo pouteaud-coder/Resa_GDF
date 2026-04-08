@@ -81,10 +81,7 @@ st.markdown("""
     .css-1d391kg, .css-1lcbmhc { background-color: #cfe9ff !important; }
     .bloc-animateur { background-color: #fff3e0; border: 1px solid #e65100; border-radius: 8px; padding: 8px 14px; margin-bottom: 8px; }
     /* Style pour les boutons radio horizontaux du mode (Générateur, Répertoire, Actions groupées) */
-    .stRadio > div {
-        gap: 8px;
-    }
-    .stRadio label {
+    .stRadio div[role="radiogroup"] label[data-baseweb="radio"] {
         border: 1px solid #a8e6cf !important;
         border-radius: 20px !important;
         padding: 6px 18px !important;
@@ -92,19 +89,23 @@ st.markdown("""
         color: #1b5e20 !important;
         font-weight: normal;
         transition: all 0.2s;
+        display: inline-flex !important;
+        align-items: center;
     }
-    .stRadio label:hover {
+    .stRadio div[role="radiogroup"] label[data-baseweb="radio"]:hover {
         background-color: #d4f5e8 !important;
         border-color: #7ec8a3 !important;
     }
-    .stRadio label[data-baseweb="radio"] div:first-child {
-        display: none !important;  /* cache le cercle radio par défaut */
+    /* Cache le cercle radio par défaut */
+    .stRadio div[role="radiogroup"] label[data-baseweb="radio"] div:first-child {
+        display: none !important;
     }
-    .stRadio label span:first-child {
+    /* Ajuste l'espacement du texte */
+    .stRadio div[role="radiogroup"] label[data-baseweb="radio"] span:first-child {
         margin-right: 0 !important;
     }
     /* Option sélectionnée */
-    .stRadio label[data-checked="true"] {
+    .stRadio div[role="radiogroup"] label[data-baseweb="radio"][data-checked="true"] {
         background-color: #a8e6cf !important;
         color: #1b5e20 !important;
         border-color: #7ec8a3 !important;
