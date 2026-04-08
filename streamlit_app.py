@@ -80,39 +80,23 @@ st.markdown("""
     input, textarea, select { background-color: #ffffff !important; color: #1b5e20 !important; border-color: #1b5e20 !important; }
     .css-1d391kg, .css-1lcbmhc { background-color: #cfe9ff !important; }
     .bloc-animateur { background-color: #fff3e0; border: 1px solid #e65100; border-radius: 8px; padding: 8px 14px; margin-bottom: 8px; }
-    /* Style pour les boutons radio horizontaux UNIQUEMENT dans le contenu principal (hors sidebar) */
-    .main .stRadio div[role="radiogroup"] {
-        display: flex;
-        flex-direction: row;
-        gap: 8px;
-    }
-    .main .stRadio div[role="radiogroup"] label[data-baseweb="radio"] {
+    /* Style des boutons de mode dans l'administration */
+    div[data-testid="column"] .stButton button {
+        border-radius: 30px !important;
         border: 1px solid #a8e6cf !important;
-        border-radius: 20px !important;
-        padding: 6px 18px !important;
         background-color: transparent !important;
         color: #1b5e20 !important;
-        font-weight: normal;
         transition: all 0.2s;
     }
-    .main .stRadio div[role="radiogroup"] label[data-baseweb="radio"]:hover {
-        background-color: #d4f5e8 !important;
-        border-color: #7ec8a3 !important;
-    }
-    /* Cache le cercle radio par défaut */
-    .main .stRadio div[role="radiogroup"] label[data-baseweb="radio"] div:first-child {
-        display: none !important;
-    }
-    /* Ajuste l'espacement du texte */
-    .main .stRadio div[role="radiogroup"] label[data-baseweb="radio"] span:first-child {
-        margin-right: 0 !important;
-    }
-    /* Option sélectionnée */
-    .main .stRadio div[role="radiogroup"] label[data-baseweb="radio"][data-checked="true"] {
+    div[data-testid="column"] .stButton button[kind="primary"] {
         background-color: #a8e6cf !important;
         color: #1b5e20 !important;
         border-color: #7ec8a3 !important;
         font-weight: bold;
+    }
+    div[data-testid="column"] .stButton button:hover {
+        background-color: #d4f5e8 !important;
+        border-color: #7ec8a3 !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1020,7 +1004,33 @@ elif menu == "🔐 Administration":
         if not h_raw:
             st.warning("⚠️ Aucun horaire n'est défini. Veuillez en créer dans l'onglet '📍 Lieux / Horaires'.")
 
-        sub = st.radio("Mode", ["Générateur", "Répertoire", "Actions groupées"], horizontal=True)
+         # Initialisation du mode en session state
+        if "admin_atelier_mode" not in st.session_state:
+            st.session_state["admin_atelier_mode"] = "Générateur"
+        
+        # Affichage des 3 boutons côte à côte
+        st.markdown("**Mode**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("📦 Générateur", 
+                         use_container_width=True,
+                         type="primary" if st.session_state["admin_atelier_mode"] == "Générateur" else "secondary"):
+                st.session_state["admin_atelier_mode"] = "Générateur"
+                st.rerun()
+        with col2:
+            if st.button("📋 Répertoire",
+                         use_container_width=True,
+                         type="primary" if st.session_state["admin_atelier_mode"] == "Répertoire" else "secondary"):
+                st.session_state["admin_atelier_mode"] = "Répertoire"
+                st.rerun()
+        with col3:
+            if st.button("⚡ Actions groupées",
+                         use_container_width=True,
+                         type="primary" if st.session_state["admin_atelier_mode"] == "Actions groupées" else "secondary"):
+                st.session_state["admin_atelier_mode"] = "Actions groupées"
+                st.rerun()
+
+sub = st.session_state["admin_atelier_mode"]
         if sub == "Générateur":
             if not l_raw or not h_raw:
                 st.error("⛔ Impossible de générer des ateliers : aucun lieu ou horaire n'est encore défini.")
