@@ -776,7 +776,7 @@ if est_animateur_connecte:
 menu = st.sidebar.radio("Navigation", menu_options)
 
 # ==========================================
-# SECTION 🎯 ANIMATEUR (tous les animateurs peuvent modifier l'animateur et son nb d'enfants)
+# SECTION 🎯 ANIMATEUR (affichage places enfants, gestion animateur)
 # ==========================================
 if menu == "🎯 Animateur":
     st.header(f"🎯 Espace Animateur — {user_connecte}")
@@ -812,6 +812,13 @@ if menu == "🎯 Animateur":
             restantes = at['capacite_max'] - total_occ
             max_enf_at = get_max_enfants_atelier(at)
             total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])
+            places_enfants_restantes = max(max_enf_at - total_enfants_actuel, 0)
+
+            # Déterminer l'affichage des places enfants
+            if places_enfants_restantes == 0:
+                statut_enfants = "🚫 Complet"
+            else:
+                statut_enfants = f"👶 {places_enfants_restantes} pl. enfants"
 
             # Récupérer l'inscription de l'animateur actuel (s'il existe)
             anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
@@ -823,9 +830,9 @@ if menu == "🎯 Animateur":
                 if anim_adh:
                     anim_nom_at = f"{anim_adh['prenom']} {anim_adh['nom']}"
 
-            statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
+            # Titre sans les places totales, uniquement places enfants
             anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
-            titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}{anim_label}"
+            titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{anim_label}"
 
             with st.expander(titre_label, expanded=False):
                 at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
@@ -834,7 +841,6 @@ if menu == "🎯 Animateur":
                 
                 # Sélection de l'animateur (tous les animateurs disponibles)
                 options_anim = ["Choisir..."] + liste_adh_anim
-                # Indice par défaut : si un animateur est déjà désigné, le sélectionner
                 if anim_nom_at and anim_nom_at in liste_adh_anim:
                     idx_def = liste_adh_anim.index(anim_nom_at) + 1
                 else:
@@ -854,17 +860,14 @@ if menu == "🎯 Animateur":
                         
                         # Calculer l'impact sur les places
                         if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
-                            # On remplace l'ancien animateur par le nouveau
                             ancien_nb = anim_ins['nb_enfants'] if anim_ins else 1
                             nouvelle_occupation = total_occ - (1 + ancien_nb) + (1 + nb_enf)
                             nouveau_total_enfants = total_enfants_actuel - ancien_nb + nb_enf
                         elif ancien_anim_id == nouvel_anim_id:
-                            # Même animateur, on modifie juste son nb_enfants
                             delta = nb_enf - nb_enf_actuel
                             nouvelle_occupation = total_occ + delta
                             nouveau_total_enfants = total_enfants_actuel + delta
                         else:
-                            # Aucun animateur actuel, on ajoute le nouveau
                             nouvelle_occupation = total_occ + 1 + nb_enf
                             nouveau_total_enfants = total_enfants_actuel + nb_enf
                         
@@ -876,11 +879,8 @@ if menu == "🎯 Animateur":
                         else:
                             # Appliquer les modifications
                             if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
-                                # Retirer l'ancien animateur
                                 supabase.table("inscriptions").delete().eq("atelier_id", at['id']).eq("adherent_id", ancien_anim_id).execute()
-                            # Mettre à jour l'atelier avec le nouvel animateur
                             supabase.table("ateliers").update({"animateur_id": nouvel_anim_id}).eq("id", at['id']).execute()
-                            # Ajouter ou mettre à jour l'inscription du nouvel animateur
                             existing_new = supabase.table("inscriptions").select("id").eq("atelier_id", at['id']).eq("adherent_id", nouvel_anim_id).execute()
                             if existing_new.data:
                                 supabase.table("inscriptions").update({"nb_enfants": nb_enf}).eq("id", existing_new.data[0]['id']).execute()
