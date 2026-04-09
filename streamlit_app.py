@@ -892,7 +892,7 @@ if menu == "🎯 Animateur":
                             confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, user_connecte)
 
 # ==========================================
-# SECTION 📝 INSCRIPTIONS (version fiable avec modification inline)
+# SECTION 📝 INSCRIPTIONS (version sans affichage places totales, vérif capacité)
 # ==========================================
 elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
@@ -934,21 +934,23 @@ elif menu == "📝 Inscriptions":
 
                     anim_id_at = at.get('animateur_id')
                     max_enf_at = get_max_enfants_atelier(at)
+                    capacite_max = at['capacite_max']
+                    
+                    # Calculs
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                     nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])  # total enfants (inclut animateur)
                     places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                     atelier_enfants_complet = (nb_enfants_inscrits >= max_enf_at)
+                    places_totales_restantes = capacite_max - total_occ
 
-                    # Calcul des places totales restantes
+                    # Déterminer le statut d'affichage (uniquement sur les places enfants)
                     if places_enfants_restantes == 0:
-                        statut_p = "🚨 COMPLET"
-                        restantes = 0
+                        statut_enfants = "🚫 Enfants complet"
                     else:
-                        restantes = at['capacite_max'] - total_occ
-                        statut_p = f"✅ {restantes} pl. libres"
+                        statut_enfants = f"👶 {places_enfants_restantes} pl. enfants"
 
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
-                    titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p} | 👶 {places_enfants_restantes} pl. enfants"
+                    titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}"
 
                     with st.expander(titre_label):
                         if is_verrouille(at):
@@ -979,13 +981,14 @@ elif menu == "📝 Inscriptions":
                                     col_nom.write(f"• {n_f}")
                                     new_nb = col_nb.number_input("", min_value=1, max_value=10, value=p['nb_enfants'], key=f"nb_{p['id']}", label_visibility="collapsed")
                                     if col_modif.button("✏️ Modifier", key=f"mod_{p['id']}"):
-                                        # Vérifier les limites
+                                        # Vérifier les limites : enfants ET places totales
                                         delta = new_nb - p['nb_enfants']
                                         nouveau_total_enfants = nb_enfants_inscrits + delta
+                                        nouveau_total_occupation = total_occ + delta  # car on change le nb enfants, l'adulte reste
                                         if nouveau_total_enfants > max_enf_at:
                                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
-                                        elif restantes - delta < 0:
-                                            st.error("Manque de places totales.")
+                                        elif nouveau_total_occupation > capacite_max:
+                                            st.error("Trop de monde")
                                         else:
                                             supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
                                             enregistrer_log(user_principal, "Modification", f"{n_f} → {new_nb} enfants - {at_info_log}")
@@ -1015,19 +1018,23 @@ elif menu == "📝 Inscriptions":
                                     existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
                                     if existing:
                                         delta_enf = nb_e - existing['nb_enfants']
-                                        if nb_enfants_inscrits + delta_enf > max_enf_at:
+                                        nouveau_total_enfants = nb_enfants_inscrits + delta_enf
+                                        nouveau_total_occupation = total_occ + delta_enf
+                                        if nouveau_total_enfants > max_enf_at:
                                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
-                                        elif restantes - delta_enf < 0:
-                                            st.error("Manque de places totales.")
+                                        elif nouveau_total_occupation > capacite_max:
+                                            st.error("Trop de monde")
                                         else:
                                             supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
                                             enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
                                             st.rerun()
                                     else:
-                                        if nb_enfants_inscrits + nb_e > max_enf_at:
+                                        nouveau_total_enfants = nb_enfants_inscrits + nb_e
+                                        nouveau_total_occupation = total_occ + 1 + nb_e  # +1 pour l'adulte
+                                        if nouveau_total_enfants > max_enf_at:
                                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
-                                        elif restantes - (1 + nb_e) < 0:
-                                            st.error("Manque de places totales.")
+                                        elif nouveau_total_occupation > capacite_max:
+                                            st.error("Trop de monde")
                                         else:
                                             supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
                                             enregistrer_log(user_principal, "Inscription", f"{qui} s'inscrit (+{nb_e} enf.) - {at_info_log}")
