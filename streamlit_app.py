@@ -892,7 +892,7 @@ if menu == "🎯 Animateur":
                             confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, user_connecte)
 
 # ==========================================
-# SECTION 📝 INSCRIPTIONS (MODIFIÉE : INCLUSION ENFANTS ANIMATEUR)
+# SECTION 📝 INSCRIPTIONS (MODIFIÉE : affichage places enfants restantes)
 # ==========================================
 elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
@@ -936,13 +936,15 @@ elif menu == "📝 Inscriptions":
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                     restantes = at['capacite_max'] - total_occ
 
-                    # MODIFICATION ICI : inclure les enfants de l'animateur
-                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])  # tous, y compris animateur
+                    # Nombre total d'enfants inscrits (y compris ceux de l'animateur)
+                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])
+                    places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                     atelier_enfants_complet = nb_enfants_inscrits >= max_enf_at
 
                     statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
-                    titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
+                    titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p} | 👶 {places_enfants_restantes} pl. enfants"
+
                     with st.expander(titre_label):
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
