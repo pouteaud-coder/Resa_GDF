@@ -98,6 +98,32 @@ st.markdown("""
         background-color: #d4f5e8 !important;
         border-color: #7ec8a3 !important;
     }
+    /* Filtre encadré vert menthe */
+    .filtre-vert-menthe {
+        display: inline-flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+    }
+    .filtre-btn {
+        border: 1.5px solid #80cbc4 !important;
+        border-radius: 6px !important;
+        padding: 3px 14px !important;
+        background: transparent !important;
+        color: #1b5e20 !important;
+        font-size: 0.92rem !important;
+        cursor: pointer !important;
+        font-weight: 500;
+    }
+    .filtre-btn.actif {
+        background-color: #b2dfdb !important;
+        font-weight: bold !important;
+    }
+    /* Tableau blanc sur fond blanc avec police noire */
+    .tableau-blanc-noir .stDataFrame, .tableau-blanc-noir [data-testid="stDataFrame"] {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -118,6 +144,24 @@ def get_secret_code():
         return res.data[0]['secret_code'] if res.data else "1234"
     except:
         return "1234"
+
+def get_max_enfants():
+    """Récupère le nombre maximum d'enfants par atelier depuis la configuration."""
+    try:
+        res = supabase.table("configuration").select("max_enfants").eq("id", "main_config").execute()
+        if res.data and res.data[0].get('max_enfants') is not None:
+            return int(res.data[0]['max_enfants'])
+    except:
+        pass
+    return 20  # Valeur par défaut
+
+def set_max_enfants(valeur):
+    """Met à jour le nombre maximum d'enfants par atelier dans la configuration."""
+    try:
+        supabase.table("configuration").update({"max_enfants": valeur}).eq("id", "main_config").execute()
+        return True
+    except Exception as e:
+        return str(e)
 
 def heure_paris_fr():
     jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -196,7 +240,6 @@ def trier_par_nom_puis_date(data):
 
 # --- FONCTIONS ANIMATEUR ---
 def get_animateur_atelier(at_id):
-    """Retourne les infos de l'animateur d'un atelier (depuis la table ateliers)."""
     try:
         res = supabase.table("ateliers").select("animateur_id").eq("id", at_id).execute()
         if res.data and res.data[0].get('animateur_id'):
@@ -209,7 +252,6 @@ def get_animateur_atelier(at_id):
     return None
 
 def get_inscription_animateur(at_id, animateur_id):
-    """Retourne l'inscription de l'animateur dans la table inscriptions."""
     try:
         res = supabase.table("inscriptions").select("*").eq("atelier_id", at_id).eq("adherent_id", animateur_id).execute()
         if res.data:
@@ -219,21 +261,10 @@ def get_inscription_animateur(at_id, animateur_id):
     return None
 
 def assigner_animateur(at_id, nouvel_anim_id, nb_enfants, ancien_anim_id=None, auteur="Animateur"):
-    """
-    Assigne un animateur à un atelier :
-    - Supprime l'inscription de l'ancien animateur (s'il existe)
-    - Met à jour animateur_id dans la table ateliers
-    - Crée l'inscription du nouvel animateur
-    """
     try:
-        # Retirer l'ancien animateur complètement
         if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
             supabase.table("inscriptions").delete().eq("atelier_id", at_id).eq("adherent_id", ancien_anim_id).execute()
-
-        # Mettre à jour l'animateur dans l'atelier
         supabase.table("ateliers").update({"animateur_id": nouvel_anim_id}).eq("id", at_id).execute()
-
-        # Vérifier si une inscription existe déjà pour le nouvel animateur
         existing = supabase.table("inscriptions").select("id").eq("atelier_id", at_id).eq("adherent_id", nouvel_anim_id).execute()
         if existing.data:
             supabase.table("inscriptions").update({"nb_enfants": nb_enfants}).eq("id", existing.data[0]['id']).execute()
@@ -249,7 +280,6 @@ def assigner_animateur(at_id, nouvel_anim_id, nb_enfants, ancien_anim_id=None, a
         return str(e)
 
 def retirer_animateur(at_id, anim_id, auteur="Admin"):
-    """Retire l'animateur d'un atelier (supprime inscription + efface animateur_id)."""
     try:
         supabase.table("inscriptions").delete().eq("atelier_id", at_id).eq("adherent_id", anim_id).execute()
         supabase.table("ateliers").update({"animateur_id": None}).eq("id", at_id).execute()
@@ -259,11 +289,6 @@ def retirer_animateur(at_id, anim_id, auteur="Admin"):
         return str(e)
 
 def afficher_liste_inscrits_avec_animateur(ins_data, animateur_id, mode="simple"):
-    """
-    Affiche la liste des inscrits avec l'animateur en orange en premier.
-    mode = "simple" : texte seul
-    mode = "html" : retourne du HTML pour st.markdown
-    """
     animateur_ins = None
     autres_ins = []
     for i in ins_data:
@@ -293,12 +318,64 @@ def export_to_excel(df):
         df.to_excel(writer, index=False, sheet_name='Export')
     return output.getvalue()
 
+def export_to_excel_with_period(df, date_debut, date_fin, titre_periode="Période"):
+    """Export Excel avec la période en haut du fichier."""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        worksheet = workbook.add_worksheet('Export')
+        writer.sheets['Export'] = worksheet
+
+        bold = workbook.add_format({'bold': True, 'font_size': 12})
+        header_fmt = workbook.add_format({'bold': True, 'bg_color': '#1b5e20', 'font_color': 'white'})
+
+        # Ligne 0 : titre période
+        periode_str = f"{titre_periode} : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
+        worksheet.write(0, 0, periode_str, bold)
+
+        # Ligne 1 : vide
+        # Ligne 2 : en-têtes
+        for col_idx, col_name in enumerate(df.columns):
+            worksheet.write(2, col_idx, col_name, header_fmt)
+
+        # Données à partir de la ligne 3
+        for row_idx, row in enumerate(df.itertuples(index=False), start=3):
+            for col_idx, value in enumerate(row):
+                worksheet.write(row_idx, col_idx, value)
+
+        # Ajustement largeur colonnes
+        for col_idx, col_name in enumerate(df.columns):
+            max_len = max(len(str(col_name)), df[col_name].astype(str).str.len().max() if len(df) > 0 else 0)
+            worksheet.set_column(col_idx, col_idx, min(max_len + 2, 40))
+
+    return output.getvalue()
+
 def export_to_pdf(title, data_list):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
     pdf.ln(10)
+    pdf.set_font("Arial", size=11)
+    if not data_list:
+        pdf.multi_cell(0, 10, txt="Aucune donnée à exporter.")
+    else:
+        for line in data_list:
+            pdf.multi_cell(0, 10, txt=line.encode('latin-1', 'replace').decode('latin-1'))
+    return pdf.output(dest='S').encode('latin-1')
+
+def export_stats_pdf(title, data_list, date_debut, date_fin):
+    """Export PDF des statistiques avec la période en en-tête."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.ln(4)
+    # Période
+    pdf.set_font("Arial", 'I', 11)
+    periode_str = f"Période : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
+    pdf.cell(0, 8, periode_str.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.ln(8)
     pdf.set_font("Arial", size=11)
     if not data_list:
         pdf.multi_cell(0, 10, txt="Aucune donnée à exporter.")
@@ -370,7 +447,6 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
         sous = f"     Horaire : {horaire}  |  AM : {t_ad}  |  Enfants : {t_en}  |  Places restantes : {restantes}"
         pdf.cell(0, 6, sous.encode('latin-1', 'replace').decode('latin-1'), ln=True)
         anim_id = a.get('animateur_id')
-        # Animateur en premier
         anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id), None) if anim_id else None
         autres = [p for p in ins_at if p['adherent_id'] != anim_id]
         autres_tries = sorted(autres, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
@@ -386,6 +462,85 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
             pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.ln(3)
     return pdf.output(dest='S').encode('latin-1')
+
+def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_fn, date_debut, date_fin, animateurs_dict=None):
+    """Export PDF du planning avec période en en-tête."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.ln(2)
+    pdf.set_font("Arial", 'I', 11)
+    periode_str = f"Période : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
+    pdf.cell(0, 8, periode_str.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.ln(4)
+    if not ateliers_data:
+        pdf.set_font("Arial", size=11)
+        pdf.cell(0, 10, txt="Aucun atelier trouvé sur cette période.", ln=True)
+        return pdf.output(dest='S').encode('latin-1')
+    for a in ateliers_data:
+        ins_at = get_inscrits_fn(a['id'])
+        t_ad = len(ins_at)
+        t_en = sum([p['nb_enfants'] for p in ins_at])
+        restantes = a['capacite_max'] - (t_ad + t_en)
+        date_fr = format_date_fr_simple(a['date_atelier'])
+        titre_at = a.get('titre', '')
+        lieu = a.get('lieu_nom', '?')
+        horaire = a.get('horaire_lib', '?')
+        verrou = " [VERROUILLE]" if is_verrouille(a) else ""
+        pdf.set_fill_color(212, 230, 241)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Arial", 'B', 11)
+        entete = f"  {date_fr} | {titre_at} | {lieu}{verrou}"
+        pdf.cell(0, 8, entete.encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.set_font("Arial", size=10)
+        sous = f"     Horaire : {horaire}  |  AM : {t_ad}  |  Enfants : {t_en}  |  Places restantes : {restantes}"
+        pdf.cell(0, 6, sous.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        anim_id = a.get('animateur_id')
+        anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id), None) if anim_id else None
+        autres = [p for p in ins_at if p['adherent_id'] != anim_id]
+        autres_tries = sorted(autres, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+        if anim_ins:
+            nom_p = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
+            ligne = f"       ★ {nom_p}  ({anim_ins['nb_enfants']} enfant(s)) [ANIMATEUR]"
+            pdf.set_font("Arial", 'B', 10)
+            pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            pdf.set_font("Arial", size=10)
+        for p in autres_tries:
+            nom_p = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
+            ligne = f"       • {nom_p}  ({p['nb_enfants']} enfant(s))"
+            pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.ln(3)
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- WIDGET FILTRE VERT MENTHE ---
+def filtre_vert_menthe(label_key, options=("Tous", "Actifs", "Inactifs"), default="Tous"):
+    """Affiche des boutons de filtre encadrés en vert menthe. Retourne la sélection."""
+    if label_key not in st.session_state:
+        st.session_state[label_key] = default
+
+    cols = st.columns(len(options) + 5)
+    for i, opt in enumerate(options):
+        actif = st.session_state[label_key] == opt
+        style_extra = "background-color:#b2dfdb !important; font-weight:bold;" if actif else "background-color:white !important;"
+        with cols[i]:
+            if st.button(
+                opt,
+                key=f"filtre_btn_{label_key}_{opt}",
+                help=f"Filtrer : {opt}",
+                use_container_width=False,
+            ):
+                st.session_state[label_key] = opt
+                st.rerun()
+
+    # On affiche le bouton sélectionné via du CSS inline
+    btns_html = ""
+    for opt in options:
+        actif = st.session_state[label_key] == opt
+        cls = "filtre-btn actif" if actif else "filtre-btn"
+        btns_html += f'<span class="{cls}" style="border:1.5px solid #80cbc4; border-radius:6px; padding:3px 14px; margin-right:6px; {"background-color:#b2dfdb; font-weight:bold;" if actif else "background-color:white;"} color:#1b5e20; font-size:0.92rem;">{opt}</span>'
+
+    return st.session_state[label_key]
 
 # --- DIALOGUES ---
 @st.dialog("⚠️ Confirmation")
@@ -483,7 +638,6 @@ def dialog_attribuer_animateur(at_id, titre_at, ancien_anim_id, ancien_anim_nom,
         st.info(f"Animateur actuel : **{ancien_anim_nom}**")
     else:
         st.info("Aucun animateur assigné.")
-    # Liste de tous les animateurs disponibles
     options_anim = ["Choisir..."] + liste_adh_anim
     idx_def = 0
     if ancien_anim_nom and ancien_anim_nom in liste_adh_anim:
@@ -572,7 +726,6 @@ def refresh_referentials():
     try:
         res_lieux = supabase.table("lieux").select("*").order("nom").execute()
         all_lieux = res_lieux.data or []
-        # Filtre côté Python pour éviter les problèmes de cache schema Supabase
         st.session_state.lieux_list = [l for l in all_lieux if l.get("est_actif", True) is not False]
     except:
         st.session_state.lieux_list = []
@@ -590,6 +743,7 @@ if 'at_list_gen' not in st.session_state: st.session_state['at_list_gen'] = []
 if 'super_access' not in st.session_state: st.session_state['super_access'] = False
 
 current_code = get_secret_code()
+MAX_ENFANTS = get_max_enfants()
 
 # --- Chargement sécurisé des adhérents ---
 try:
@@ -601,7 +755,6 @@ except:
 dict_adh = {f"{a['prenom']} {a['nom']}": a['id'] for a in adh_data}
 liste_adh = list(dict_adh.keys())
 
-# Listes spécifiques aux animateurs
 adh_animateurs = [a for a in adh_data if a.get('est_animateur', False)]
 dict_adh_anim = {f"{a['prenom']} {a['nom']}": a['id'] for a in adh_animateurs}
 liste_adh_anim = list(dict_adh_anim.keys())
@@ -611,7 +764,6 @@ set_id_animateurs = {a['id'] for a in adh_animateurs}
 st.sidebar.markdown("### 👤 Qui êtes-vous ?")
 user_connecte = st.sidebar.selectbox("Votre nom :", ["Choisir..."] + liste_adh, key="user_connecte_sidebar")
 
-# Vérifier si l'utilisateur connecté est animateur
 est_animateur_connecte = False
 id_user_connecte = None
 if user_connecte != "Choisir...":
@@ -664,14 +816,12 @@ if menu == "🎯 Animateur":
             total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
             restantes = at['capacite_max'] - total_occ
 
-            # Trouver le nom de l'animateur actuel
             anim_nom_at = None
             if anim_id_at:
                 anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
                 if anim_ins:
                     anim_nom_at = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
                 else:
-                    # Chercher dans adh_data
                     anim_adh = next((a for a in adh_data if a['id'] == anim_id_at), None)
                     if anim_adh:
                         anim_nom_at = f"{anim_adh['prenom']} {anim_adh['nom']}"
@@ -683,12 +833,10 @@ if menu == "🎯 Animateur":
             with st.expander(titre_label, expanded=je_suis_animateur_ici):
                 at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
 
-                # --- Bloc animateur actuel ---
                 st.markdown("**Animateur de cet atelier :**")
                 if anim_id_at and anim_nom_at:
                     col_anim1, col_anim2, col_anim3 = st.columns([2, 1, 1])
                     col_anim1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {anim_nom_at}</span>', unsafe_allow_html=True)
-                    # Modifier nb enfants animateur (uniquement si je suis l'animateur ou un autre animateur)
                     anim_ins_cur = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
                     nb_anim_cur = anim_ins_cur['nb_enfants'] if anim_ins_cur else 1
                     new_nb_anim = col_anim2.number_input("Enf.", 0, 10, int(nb_anim_cur), key=f"anim_nb_{at['id']}", label_visibility="collapsed")
@@ -707,10 +855,8 @@ if menu == "🎯 Animateur":
 
                 st.markdown("---")
 
-                # --- Liste des inscrits ---
                 if ins_data:
                     st.markdown("**Inscrits :**")
-                    # Animateur en orange en premier
                     anim_ligne = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
                     autres_lignes = [i for i in ins_data if i['adherent_id'] != anim_id_at]
                     autres_tries = sorted(autres_lignes, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
@@ -750,7 +896,6 @@ elif menu == "📝 Inscriptions":
         > 🔐 Administration → 👥 Liste AM → Ajouter une première assistante maternelle.
         """)
     else:
-        # Utiliser la sélection de la sidebar si disponible
         if user_connecte != "Choisir...":
             idx_user = liste_adh.index(user_connecte) + 1 if user_connecte in liste_adh else 0
         else:
@@ -782,6 +927,11 @@ elif menu == "📝 Inscriptions":
                     anim_id_at = at.get('animateur_id')
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                     restantes = at['capacite_max'] - total_occ
+
+                    # Calcul du nombre total d'enfants inscrits (hors animateur)
+                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data if i['adherent_id'] != anim_id_at])
+                    atelier_enfants_complet = nb_enfants_inscrits >= MAX_ENFANTS
+
                     statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                     titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
@@ -789,7 +939,6 @@ elif menu == "📝 Inscriptions":
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
 
-                        # Affichage des inscrits avec animateur en orange en premier
                         if ins_data:
                             anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
                             autres_ins = [i for i in ins_data if i['adherent_id'] != anim_id_at]
@@ -816,30 +965,36 @@ elif menu == "📝 Inscriptions":
 
                         if not is_verrouille(at):
                             st.markdown("---")
-                            # Pré-sélection de l'utilisateur courant
                             try: idx_def = (liste_adh.index(user_principal) + 1)
                             except: idx_def = 0
                             c1, c2, c3 = st.columns([2, 1, 1])
                             qui = c1.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
                             nb_e = c2.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
 
-                            # Bloquer si c'est l'animateur
                             qui_est_anim = (qui != "Choisir..." and dict_adh.get(qui) == anim_id_at)
                             if qui_est_anim:
                                 st.warning("🔒 Cette personne est l'animateur de cet atelier. Son inscription est gérée automatiquement.")
+                            elif atelier_enfants_complet and qui != "Choisir...":
+                                st.warning(f"🚫 Le nombre maximum d'enfants ({MAX_ENFANTS}) est atteint pour cet atelier.")
                             elif c3.button("Valider", key=f"v_{at['id']}", type="primary"):
                                 if qui != "Choisir...":
                                     id_adh = dict_adh[qui]
                                     existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
                                     if existing:
-                                        if restantes - (nb_e - existing['nb_enfants']) < 0:
+                                        # Vérifier si ajout d'enfants dépasse le max
+                                        delta_enf = nb_e - existing['nb_enfants']
+                                        if nb_enfants_inscrits + delta_enf > MAX_ENFANTS:
+                                            st.error(f"🚫 Le nombre maximum d'enfants ({MAX_ENFANTS}) serait dépassé.")
+                                        elif restantes - delta_enf < 0:
                                             st.error("Manque de places")
                                         else:
                                             supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
                                             enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
                                             st.rerun()
                                     else:
-                                        if restantes - (1 + nb_e) < 0:
+                                        if nb_enfants_inscrits + nb_e > MAX_ENFANTS:
+                                            st.error(f"🚫 Le nombre maximum d'enfants ({MAX_ENFANTS}) serait dépassé.")
+                                        elif restantes - (1 + nb_e) < 0:
                                             st.error("Manque de places")
                                         else:
                                             supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
@@ -944,7 +1099,6 @@ elif menu == "📊 Suivi & Récap":
                 cl_c = "alerte-complet" if restantes <= 0 else ""
                 st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
                 if ins_at:
-                    # Animateur en orange en premier
                     anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
                     autres = [p for p in ins_at if p['adherent_id'] != anim_id_at]
                     autres_tries = sorted(autres, key=lambda x: (x['adherents']['nom'], x['adherents']['prenom']))
@@ -964,11 +1118,9 @@ elif menu == "📊 Suivi & Récap":
 # SECTION 🔐 ADMINISTRATION
 # ==========================================
 elif menu == "🔐 Administration":
-    # Initialisation du flag d'authentification admin
     if "admin_auth" not in st.session_state:
         st.session_state["admin_auth"] = False
 
-    # Zone de connexion
     if not st.session_state["admin_auth"] and not st.session_state.get("super_access", False):
         st.markdown("### 🔐 Accès administration")
         with st.form("admin_login_form"):
@@ -980,13 +1132,14 @@ elif menu == "🔐 Administration":
         if submitted and pw == current_code:
             st.session_state["admin_auth"] = True
             st.rerun()
-        st.stop()  # Empêche l'affichage des onglets tant que non authentifié
+        st.stop()
 
-    # ---------- Affichage des onglets d'administration ----------
-    t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs([
+    # ---------- Onglets d'administration ----------
+    t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs([
         "🏗️ Ateliers", "📊 Suivi AM", "📅 Planning Ateliers",
         "📈 Statistiques de participation", "👥 Liste AM",
-        "📍 Lieux / Horaires", "⚙️ Sécurité", "📜 Journal des actions"
+        "📍 Lieux / Horaires", "⚙️ Sécurité", "📜 Journal des actions",
+        "🎯 Animateur (Admin)"
     ])
 
     with t1:  # ATELIERS
@@ -1004,14 +1157,13 @@ elif menu == "🔐 Administration":
         if not h_raw:
             st.warning("⚠️ Aucun horaire n'est défini. Veuillez en créer dans l'onglet '📍 Lieux / Horaires'.")
 
-        # --- MENU MODE AVEC BOUTONS (remplace st.radio) ---
         if "admin_atelier_mode" not in st.session_state:
             st.session_state["admin_atelier_mode"] = "Générateur"
 
         st.markdown("**Mode**")
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("📦 Générateur", 
+            if st.button("📦 Générateur",
                          use_container_width=True,
                          type="primary" if st.session_state["admin_atelier_mode"] == "Générateur" else "secondary"):
                 st.session_state["admin_atelier_mode"] = "Générateur"
@@ -1031,7 +1183,6 @@ elif menu == "🔐 Administration":
 
         sub = st.session_state["admin_atelier_mode"]
 
-        # --- SUITE DU CODE SELON LE MODE ---
         if sub == "Générateur":
             if not l_raw or not h_raw:
                 st.error("⛔ Impossible de générer des ateliers : aucun lieu ou horaire n'est encore défini.")
@@ -1067,6 +1218,16 @@ elif menu == "🔐 Administration":
                     st.session_state['at_list_gen'] = tmp
                     st.rerun()
                 if st.session_state['at_list_gen']:
+                    # Tableau police noire sur fond blanc
+                    st.markdown("""
+                    <style>
+                    [data-testid="stDataFrame"] { background-color: #ffffff !important; color: #000000 !important; }
+                    [data-testid="stDataFrame"] * { color: #000000 !important; background-color: #ffffff !important; }
+                    [data-testid="stDataFrame"] table { background-color: #ffffff !important; }
+                    [data-testid="stDataFrame"] th { background-color: #f0f0f0 !important; color: #000000 !important; }
+                    [data-testid="stDataFrame"] td { color: #000000 !important; }
+                    </style>
+                    """, unsafe_allow_html=True)
                     df_ed = st.data_editor(
                         pd.DataFrame(st.session_state['at_list_gen']),
                         num_rows="dynamic",
@@ -1232,15 +1393,44 @@ elif menu == "🔐 Administration":
 
     with t3:  # PLANNING ATELIERS (Admin)
         st.subheader("📅 Planning des Ateliers")
-        filtre_statut = st.radio("Filtrer par statut :", ["Tous", "Actifs", "Inactifs"], horizontal=True, key="admin_plan_filtre")
+
+        # Filtre vert menthe
+        st.markdown("**Filtrer par statut :**")
+        options_filtre_plan = ("Tous", "Actifs", "Inactifs")
+        if "filtre_plan_admin" not in st.session_state:
+            st.session_state["filtre_plan_admin"] = "Tous"
+
+        col_f1, col_f2, col_f3, col_f_rest = st.columns([1, 1, 1, 5])
+        for col_f, opt in zip([col_f1, col_f2, col_f3], options_filtre_plan):
+            actif = st.session_state["filtre_plan_admin"] == opt
+            bg = "#b2dfdb" if actif else "white"
+            fw = "bold" if actif else "normal"
+            with col_f:
+                if st.button(opt, key=f"filtre_plan_{opt}",
+                             help=f"Filtrer : {opt}",
+                             use_container_width=True):
+                    st.session_state["filtre_plan_admin"] = opt
+                    st.rerun()
+
+        # Style vert menthe sur les boutons filtre
+        st.markdown("""
+        <style>
+        [data-testid="column"]:nth-child(1) button, [data-testid="column"]:nth-child(2) button, [data-testid="column"]:nth-child(3) button {
+            border: 1.5px solid #80cbc4 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        filtre_statut_plan = st.session_state["filtre_plan_admin"]
+
         c1_adm, c2_adm = st.columns(2)
         d_s_a = c1_adm.date_input("Du", date.today(), key="adm_plan_d1", format="DD/MM/YYYY")
         d_e_a = c2_adm.date_input("Au", d_s_a + timedelta(days=30), key="adm_plan_d2", format="DD/MM/YYYY")
         try:
             query = supabase.table("ateliers").select("*").gte("date_atelier", str(d_s_a)).lte("date_atelier", str(d_e_a))
-            if filtre_statut == "Actifs":
+            if filtre_statut_plan == "Actifs":
                 query = query.eq("est_actif", True)
-            elif filtre_statut == "Inactifs":
+            elif filtre_statut_plan == "Inactifs":
                 query = query.eq("est_actif", False)
             ateliers_bruts = query.order("date_atelier").execute().data or []
         except:
@@ -1270,10 +1460,16 @@ elif menu == "🔐 Administration":
 
         df_adm_at = pd.DataFrame(adm_ins_list) if adm_ins_list else pd.DataFrame(columns=["Date", "Atelier", "Lieu", "AM", "Enfants"])
         cea1, cea2 = st.columns(2)
-        cea1.download_button("📥 Excel Planning (Admin)", data=export_to_excel(df_adm_at), file_name="admin_planning_ateliers.xlsx", key="adm_exp_xl")
-        cea2.download_button("📥 PDF Planning (Admin)", data=export_planning_ateliers_pdf(
-            "Planning des Ateliers (Administration)", ateliers, lambda aid: cache_ins_adm.get(aid, [])
-        ), file_name="admin_planning_ateliers.pdf", key="adm_exp_pdf")
+        cea1.download_button("📥 Excel Planning (Admin)",
+                             data=export_to_excel_with_period(df_adm_at, d_s_a, d_e_a, "Planning des ateliers"),
+                             file_name="admin_planning_ateliers.xlsx", key="adm_exp_xl")
+        cea2.download_button("📥 PDF Planning (Admin)",
+                             data=export_planning_ateliers_pdf_with_period(
+                                 "Planning des Ateliers (Administration)", ateliers,
+                                 lambda aid: cache_ins_adm.get(aid, []),
+                                 d_s_a, d_e_a
+                             ),
+                             file_name="admin_planning_ateliers.pdf", key="adm_exp_pdf")
         if ateliers:
             for index, a in enumerate(ateliers):
                 c_l = get_color(a['lieu_nom'])
@@ -1388,7 +1584,18 @@ elif menu == "🔐 Administration":
                 count = sum(1 for x in filtered_ins if x['adherent_id'] == am_id)
                 stats_list.append({"Assistante Maternelle": am_nom, "Nombre d'ateliers": count})
             df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False)
-            st.table(df_stats)
+
+            # Affichage tableau : police noire sur fond blanc, sans colonne ID
+            st.markdown("""
+            <style>
+            [data-testid="stTable"] { background-color: #ffffff !important; color: #000000 !important; }
+            [data-testid="stTable"] * { color: #000000 !important; }
+            [data-testid="stTable"] th { background-color: #f0f0f0 !important; color: #000000 !important; }
+            [data-testid="stTable"] td { background-color: #ffffff !important; color: #000000 !important; }
+            </style>
+            """, unsafe_allow_html=True)
+            st.table(df_stats)  # Affiche uniquement "Assistante Maternelle" et "Nombre d'ateliers"
+
             total_inscr = df_stats["Nombre d'ateliers"].sum()
             st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
             st.markdown(f"**Nombre d'ateliers proposés sur la période :** {nb_at_proposes}")
@@ -1398,7 +1605,13 @@ elif menu == "🔐 Administration":
                     date_fr = format_date_fr_simple(at['date_atelier'])
                     st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu_nom']} - {at['horaire_lib']})")
             ce_s1, ce_s2 = st.columns(2)
-            ce_s1.download_button("📥 Excel Statistiques", data=export_to_excel(df_stats), file_name=f"stats_am_{ds_stat}_{de_stat}.xlsx")
+            # Export Excel avec période
+            ce_s1.download_button(
+                "📥 Excel Statistiques",
+                data=export_to_excel_with_period(df_stats, ds_stat, de_stat, "Statistiques de participation"),
+                file_name=f"stats_am_{ds_stat}_{de_stat}.xlsx"
+            )
+            # Export PDF avec période
             pdf_stat_lines = []
             for _, r in df_stats.iterrows():
                 pdf_stat_lines.append(f"{r['Assistante Maternelle']} : {r['Nombre d\'ateliers']} atelier(s)")
@@ -1410,7 +1623,11 @@ elif menu == "🔐 Administration":
             for at in ateliers:
                 date_fr = format_date_fr_simple(at['date_atelier'])
                 pdf_stat_lines.append(f"- {date_fr} : {at['titre']} ({at['lieu_nom']} - {at['horaire_lib']})")
-            ce_s2.download_button("📥 PDF Statistiques", data=export_to_pdf("Statistiques de participation AM", pdf_stat_lines), file_name=f"stats_am_{ds_stat}_{de_stat}.pdf")
+            ce_s2.download_button(
+                "📥 PDF Statistiques",
+                data=export_stats_pdf("Statistiques de participation AM", pdf_stat_lines, ds_stat, de_stat),
+                file_name=f"stats_am_{ds_stat}_{de_stat}.pdf"
+            )
         else:
             if not liste_adh:
                 st.info("ℹ️ Aucune assistante maternelle enregistrée.")
@@ -1454,13 +1671,37 @@ elif menu == "🔐 Administration":
             nb_actives = sum(1 for u in adh_data_admin if u.get('est_actif', True))
             nb_inactives = len(adh_data_admin) - nb_actives
             st.markdown("---")
+
+            # Filtre vert menthe pour la liste AM
+            st.markdown("**Filtrer :**")
+            options_filtre_am = ("Tous", "Actifs", "Inactifs")
+            if "filtre_liste_am" not in st.session_state:
+                st.session_state["filtre_liste_am"] = "Tous"
+
+            col_am1, col_am2, col_am3, col_am_rest = st.columns([1, 1, 1, 5])
+            for col_am, opt in zip([col_am1, col_am2, col_am3], options_filtre_am):
+                actif = st.session_state["filtre_liste_am"] == opt
+                with col_am:
+                    if st.button(opt, key=f"filtre_am_{opt}", use_container_width=True):
+                        st.session_state["filtre_liste_am"] = opt
+                        st.rerun()
+
+            filtre_am_actuel = st.session_state["filtre_liste_am"]
+
             st.markdown(
                 f"**Liste des AM** ({nb_actives} actives, {nb_inactives} inactives) — "
                 f"⭐ statut animateur · 🟢/🔴 statut adhésion"
             )
+
             for u in adh_data_admin:
                 est_anim = u.get('est_animateur', False)
                 est_actif_am = u.get('est_actif', True)
+
+                # Appliquer le filtre
+                if filtre_am_actuel == "Actifs" and not est_actif_am:
+                    continue
+                if filtre_am_actuel == "Inactifs" and est_actif_am:
+                    continue
 
                 style_nom = "color:#9e9e9e; text-decoration:line-through;" if not est_actif_am else ""
                 badge_inactif = ' <span style="background:#9e9e9e;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;font-weight:bold;">INACTIF</span>' if not est_actif_am else ''
@@ -1547,7 +1788,7 @@ elif menu == "🔐 Administration":
             else:
                 for l in l_raw:
                     ca, cb_edit, cb_del = st.columns([0.65, 0.18, 0.17])
-                    ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l["nom"])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
+                    ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l[\"nom\"])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
                     if cb_edit.button("✏️", key=f"lx_edit_{l['id']}", help="Modifier"):
                         edit_lieu_dialog(l['id'], l['nom'], l['capacite'])
                     if cb_del.button("🗑️", key=f"lx_{l['id']}", help="Supprimer"):
@@ -1603,6 +1844,10 @@ elif menu == "🔐 Administration":
                         st.error("L'horaire ne peut pas être vide.")
 
     with t7:  # ⚙️ SÉCURITÉ
+        st.subheader("⚙️ Sécurité & Configuration")
+
+        # Changement du code admin
+        st.markdown("**🔑 Changer le code administrateur**")
         with st.form("sec_form"):
             o, n = st.text_input("Ancien code", type="password"), st.text_input("Nouveau code", type="password")
             if st.form_submit_button("Changer le code"):
@@ -1615,6 +1860,33 @@ elif menu == "🔐 Administration":
                         st.error(f"Erreur : {str(e)}")
                 else:
                     st.error("Ancien code incorrect")
+
+        st.markdown("---")
+
+        # Configuration du nombre maximum d'enfants
+        st.markdown("**👶 Nombre maximum d'enfants par atelier**")
+        current_max = get_max_enfants()
+        st.info(f"Valeur actuelle : **{current_max} enfants** maximum par atelier.")
+        with st.form("max_enfants_form"):
+            nouveau_max = st.number_input(
+                "Nombre maximum d'enfants autorisés par atelier",
+                min_value=1,
+                max_value=100,
+                value=current_max,
+                help="Par défaut : 20. Ce nombre limite le total d'enfants pouvant s'inscrire à un même atelier."
+            )
+            if st.form_submit_button("💾 Enregistrer la limite"):
+                result = set_max_enfants(nouveau_max)
+                if result is True:
+                    enregistrer_log("Admin", "Configuration", f"Nombre max enfants par atelier modifié : {nouveau_max}")
+                    st.success(f"✅ Limite mise à jour : {nouveau_max} enfants maximum par atelier.")
+                    st.rerun()
+                else:
+                    st.error(f"Erreur lors de la mise à jour : {result}")
+                    st.info("💡 Si la colonne 'max_enfants' n'existe pas dans votre table 'configuration', ajoutez-la dans Supabase (type integer, valeur par défaut 20).")
+
+        st.markdown("---")
+
         if st.button("🚪 Déconnexion Super Admin"):
             st.session_state['super_access'] = False
             st.rerun()
@@ -1631,6 +1903,12 @@ elif menu == "🔐 Administration":
             if res_logs.data:
                 logs_df = pd.DataFrame(res_logs.data)
                 logs_df['created_at'] = pd.to_datetime(logs_df['created_at'], utc=True).dt.tz_convert("Europe/Paris").dt.strftime('%d/%m/%Y %H:%M')
+                # Tableau police noire sur fond blanc
+                st.markdown("""
+                <style>
+                [data-testid="stDataFrame"] iframe { background-color: #ffffff !important; }
+                </style>
+                """, unsafe_allow_html=True)
                 st.dataframe(
                     logs_df[['created_at', 'utilisateur', 'action', 'details']],
                     column_config={
@@ -1646,6 +1924,107 @@ elif menu == "🔐 Administration":
                 st.info("Aucune action enregistrée pour cette période.")
         except Exception as e:
             st.info("ℹ️ Le journal des actions sera disponible une fois que des opérations auront été effectuées.")
+
+    with t9:  # 🎯 ANIMATEUR (Admin)
+        st.subheader("🎯 Espace Animateur (accès Administration)")
+        st.markdown(f'<div style="background-color:#fff3e0; border:1px solid #e65100; border-radius:8px; padding:10px 16px; margin-bottom:16px; color:#e65100; font-weight:bold;">⭐ Vous accédez à la vue animateur en tant qu\'administrateur.</div>', unsafe_allow_html=True)
+
+        today_str = str(date.today())
+        try:
+            ateliers_bruts_anim = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data or []
+        except:
+            ateliers_bruts_anim = []
+
+        lieux_dict_anim = {l['id']: l['nom'] for l in st.session_state.lieux_list}
+        horaires_dict_anim = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+        ateliers_anim = []
+        for at in ateliers_bruts_anim:
+            at['lieu_nom'] = lieux_dict_anim.get(at['lieu_id'], '?')
+            at['horaire_lib'] = horaires_dict_anim.get(at['horaire_id'], '?')
+            ateliers_anim.append(at)
+
+        if not ateliers_anim:
+            st.info("ℹ️ Aucun atelier à venir.")
+        else:
+            for at in ateliers_anim:
+                anim_id_at = at.get('animateur_id')
+
+                try:
+                    res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
+                    ins_data = res_ins.data if res_ins.data else []
+                except:
+                    ins_data = []
+
+                total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
+                restantes = at['capacite_max'] - total_occ
+
+                anim_nom_at = None
+                if anim_id_at:
+                    anim_ins_check = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
+                    if anim_ins_check:
+                        anim_nom_at = f"{anim_ins_check['adherents']['prenom']} {anim_ins_check['adherents']['nom']}"
+                    else:
+                        anim_adh_check = next((a for a in adh_data if a['id'] == anim_id_at), None)
+                        if anim_adh_check:
+                            anim_nom_at = f"{anim_adh_check['prenom']} {anim_adh_check['nom']}"
+
+                statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
+                anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
+                titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}{anim_label}"
+
+                with st.expander(titre_label, expanded=False):
+                    at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
+
+                    st.markdown("**Animateur de cet atelier :**")
+                    if anim_id_at and anim_nom_at:
+                        col_anim1, col_anim2, col_anim3 = st.columns([2, 1, 1])
+                        col_anim1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {anim_nom_at}</span>', unsafe_allow_html=True)
+                        anim_ins_cur = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
+                        nb_anim_cur = anim_ins_cur['nb_enfants'] if anim_ins_cur else 1
+                        new_nb_anim = col_anim2.number_input("Enf.", 0, 10, int(nb_anim_cur), key=f"adm_anim_nb2_{at['id']}", label_visibility="collapsed")
+                        if col_anim2.button("✏️", key=f"adm_anim_mod_nb2_{at['id']}"):
+                            if anim_ins_cur:
+                                supabase.table("inscriptions").update({"nb_enfants": new_nb_anim}).eq("id", anim_ins_cur['id']).execute()
+                                enregistrer_log("Admin", "Modif nb enfants animateur", f"{anim_nom_at} → {new_nb_anim} enf. - {at_info_log}")
+                                st.rerun()
+                        if col_anim3.button("🔄 Changer", key=f"adm_anim_chg2_{at['id']}"):
+                            dialog_attribuer_animateur(at['id'], at['titre'], anim_id_at, anim_nom_at, liste_adh_anim, dict_adh_anim, auteur="Admin")
+                    else:
+                        col_an1, col_an2 = st.columns([3, 1])
+                        col_an1.write("_Aucun animateur désigné_")
+                        if col_an2.button("🎯 Désigner", key=f"adm_anim_set2_{at['id']}"):
+                            dialog_attribuer_animateur(at['id'], at['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur="Admin")
+
+                    st.markdown("---")
+
+                    if ins_data:
+                        st.markdown("**Inscrits :**")
+                        anim_ligne = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
+                        autres_lignes = [i for i in ins_data if i['adherent_id'] != anim_id_at]
+                        autres_tries = sorted(autres_lignes, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+
+                        if anim_ligne:
+                            n_a = f"{anim_ligne['adherents']['prenom']} {anim_ligne['adherents']['nom']}"
+                            ca1, ca2, ca3, ca4 = st.columns([0.45, 0.18, 0.18, 0.19])
+                            ca1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {n_a} <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                            new_nb_a = ca2.number_input("Enf.", 0, 10, int(anim_ligne['nb_enfants']), key=f"adm_anim_enf2_{anim_ligne['id']}", label_visibility="collapsed")
+                            if ca3.button("✏️ Modifier", key=f"adm_anim_mod2_{anim_ligne['id']}"):
+                                supabase.table("inscriptions").update({"nb_enfants": new_nb_a}).eq("id", anim_ligne['id']).execute()
+                                enregistrer_log("Admin", "Modification animateur (admin view)", f"{n_a} → {new_nb_a} enfants - {at_info_log}")
+                                st.rerun()
+                            ca4.write("🔒 _Animateur_")
+
+                        for p in autres_tries:
+                            n_f = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
+                            cp1, cp2, cp3, cp4 = st.columns([0.45, 0.18, 0.18, 0.19])
+                            cp1.write(f"• {n_f}")
+                            new_nb = cp2.number_input("Enf.", 0, 10, int(p['nb_enfants']), key=f"adm_nb2_{p['id']}", label_visibility="collapsed")
+                            if cp3.button("✏️ Modifier", key=f"adm_mod2_{p['id']}"):
+                                supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
+                                enregistrer_log("Admin", "Modification (admin view)", f"{n_f} → {new_nb} enfants - {at_info_log}")
+                                st.rerun()
+                            if cp4.button("🗑️", key=f"adm_del2_{p['id']}"):
+                                confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, "Admin")
 
     # Bouton de déconnexion administration dans la sidebar
     if st.sidebar.button("🚪 Déconnexion administration"):
