@@ -929,7 +929,7 @@ elif menu == "📝 Inscriptions":
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                     restantes = at['capacite_max'] - total_occ
 
-                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data if i['adherent_id'] != anim_id_at])
+                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])
                     atelier_enfants_complet = nb_enfants_inscrits >= max_enf_at
 
                     statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
