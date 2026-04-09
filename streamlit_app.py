@@ -2019,7 +2019,7 @@ elif menu == "🔐 Administration":
         if not ateliers_anim:
             st.info("ℹ️ Aucun atelier actif sur cette période.")
         else:
-            for at in ateliers_anim:
+            for idx, at in enumerate(ateliers_anim):  # Ajout de l'index
                 anim_id_at = at.get('animateur_id')
                 try:
                     res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
@@ -2056,19 +2056,19 @@ elif menu == "🔐 Administration":
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                     st.markdown("**Gestion de l'animateur :**")
 
-                    # Sélection de l'animateur
+                    # Sélection de l'animateur (clé unique avec idx)
                     options_anim = ["Choisir..."] + liste_adh_anim
                     if anim_nom_at and anim_nom_at in liste_adh_anim:
                         idx_def = liste_adh_anim.index(anim_nom_at) + 1
                     else:
                         idx_def = 0
-                    nouvel_anim = st.selectbox("Animateur à assigner", options_anim, index=idx_def, key=f"adm_anim_select_{at['id']}")
+                    nouvel_anim = st.selectbox("Animateur à assigner", options_anim, index=idx_def, key=f"adm_anim_select_{at['id']}_{idx}")
 
-                    # Nombre d'enfants de l'animateur
+                    # Nombre d'enfants (clé unique avec idx)
                     nb_enf_actuel = anim_ins['nb_enfants'] if anim_ins else 1
-                    nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=int(nb_enf_actuel), key=f"adm_anim_nb_{at['id']}")
+                    nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=int(nb_enf_actuel), key=f"adm_anim_nb_{at['id']}_{idx}")
 
-                    if st.button("✅ Appliquer", key=f"adm_anim_apply_{at['id']}", type="primary"):
+                    if st.button("✅ Appliquer", key=f"adm_anim_apply_{at['id']}_{idx}", type="primary"):
                         if nouvel_anim == "Choisir...":
                             st.warning("Veuillez sélectionner un animateur.")
                         else:
