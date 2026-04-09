@@ -80,7 +80,6 @@ st.markdown("""
     input, textarea, select { background-color: #ffffff !important; color: #1b5e20 !important; border-color: #1b5e20 !important; }
     .css-1d391kg, .css-1lcbmhc { background-color: #cfe9ff !important; }
     .bloc-animateur { background-color: #fff3e0; border: 1px solid #e65100; border-radius: 8px; padding: 8px 14px; margin-bottom: 8px; }
-    /* Style des boutons de mode dans l'administration */
     div[data-testid="column"] .stButton button {
         border-radius: 30px !important;
         border: 1px solid #a8e6cf !important;
@@ -98,7 +97,6 @@ st.markdown("""
         background-color: #d4f5e8 !important;
         border-color: #7ec8a3 !important;
     }
-    /* Filtre encadré vert menthe */
     .filtre-vert-menthe {
         display: inline-flex;
         gap: 8px;
@@ -118,11 +116,6 @@ st.markdown("""
     .filtre-btn.actif {
         background-color: #b2dfdb !important;
         font-weight: bold !important;
-    }
-    /* Tableau blanc sur fond blanc avec police noire */
-    .tableau-blanc-noir .stDataFrame, .tableau-blanc-noir [data-testid="stDataFrame"] {
-        background-color: #ffffff !important;
-        color: #000000 !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -146,22 +139,29 @@ def get_secret_code():
         return "1234"
 
 def get_max_enfants():
-    """Récupère le nombre maximum d'enfants par atelier depuis la configuration."""
+    """Récupère le nombre maximum d'enfants global depuis la configuration."""
     try:
         res = supabase.table("configuration").select("max_enfants").eq("id", "main_config").execute()
         if res.data and res.data[0].get('max_enfants') is not None:
             return int(res.data[0]['max_enfants'])
     except:
         pass
-    return 20  # Valeur par défaut
+    return 20
 
 def set_max_enfants(valeur):
-    """Met à jour le nombre maximum d'enfants par atelier dans la configuration."""
+    """Met à jour le nombre maximum d'enfants global dans la configuration."""
     try:
         supabase.table("configuration").update({"max_enfants": valeur}).eq("id", "main_config").execute()
         return True
     except Exception as e:
         return str(e)
+
+def get_max_enfants_atelier(at):
+    """Retourne le max_enfants spécifique à l'atelier, ou le global si non défini."""
+    val = at.get('max_enfants')
+    if val is not None:
+        return int(val)
+    return MAX_ENFANTS  # fallback sur le global
 
 def heure_paris_fr():
     jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -319,35 +319,23 @@ def export_to_excel(df):
     return output.getvalue()
 
 def export_to_excel_with_period(df, date_debut, date_fin, titre_periode="Période"):
-    """Export Excel avec la période en haut du fichier."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         workbook = writer.book
         worksheet = workbook.add_worksheet('Export')
         writer.sheets['Export'] = worksheet
-
         bold = workbook.add_format({'bold': True, 'font_size': 12})
         header_fmt = workbook.add_format({'bold': True, 'bg_color': '#1b5e20', 'font_color': 'white'})
-
-        # Ligne 0 : titre période
         periode_str = f"{titre_periode} : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
         worksheet.write(0, 0, periode_str, bold)
-
-        # Ligne 1 : vide
-        # Ligne 2 : en-têtes
         for col_idx, col_name in enumerate(df.columns):
             worksheet.write(2, col_idx, col_name, header_fmt)
-
-        # Données à partir de la ligne 3
         for row_idx, row in enumerate(df.itertuples(index=False), start=3):
             for col_idx, value in enumerate(row):
                 worksheet.write(row_idx, col_idx, value)
-
-        # Ajustement largeur colonnes
         for col_idx, col_name in enumerate(df.columns):
             max_len = max(len(str(col_name)), df[col_name].astype(str).str.len().max() if len(df) > 0 else 0)
             worksheet.set_column(col_idx, col_idx, min(max_len + 2, 40))
-
     return output.getvalue()
 
 def export_to_pdf(title, data_list):
@@ -365,13 +353,11 @@ def export_to_pdf(title, data_list):
     return pdf.output(dest='S').encode('latin-1')
 
 def export_stats_pdf(title, data_list, date_debut, date_fin):
-    """Export PDF des statistiques avec la période en en-tête."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
     pdf.ln(4)
-    # Période
     pdf.set_font("Arial", 'I', 11)
     periode_str = f"Période : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
     pdf.cell(0, 8, periode_str.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
@@ -464,7 +450,6 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
     return pdf.output(dest='S').encode('latin-1')
 
 def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_fn, date_debut, date_fin, animateurs_dict=None):
-    """Export PDF du planning avec période en en-tête."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
@@ -515,31 +500,15 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_
 
 # --- WIDGET FILTRE VERT MENTHE ---
 def filtre_vert_menthe(label_key, options=("Tous", "Actifs", "Inactifs"), default="Tous"):
-    """Affiche des boutons de filtre encadrés en vert menthe. Retourne la sélection."""
     if label_key not in st.session_state:
         st.session_state[label_key] = default
-
     cols = st.columns(len(options) + 5)
     for i, opt in enumerate(options):
         actif = st.session_state[label_key] == opt
-        style_extra = "background-color:#b2dfdb !important; font-weight:bold;" if actif else "background-color:white !important;"
         with cols[i]:
-            if st.button(
-                opt,
-                key=f"filtre_btn_{label_key}_{opt}",
-                help=f"Filtrer : {opt}",
-                use_container_width=False,
-            ):
+            if st.button(opt, key=f"filtre_btn_{label_key}_{opt}", help=f"Filtrer : {opt}", use_container_width=False):
                 st.session_state[label_key] = opt
                 st.rerun()
-
-    # On affiche le bouton sélectionné via du CSS inline
-    btns_html = ""
-    for opt in options:
-        actif = st.session_state[label_key] == opt
-        cls = "filtre-btn actif" if actif else "filtre-btn"
-        btns_html += f'<span class="{cls}" style="border:1.5px solid #80cbc4; border-radius:6px; padding:3px 14px; margin-right:6px; {"background-color:#b2dfdb; font-weight:bold;" if actif else "background-color:white;"} color:#1b5e20; font-size:0.92rem;">{opt}</span>'
-
     return st.session_state[label_key]
 
 # --- DIALOGUES ---
@@ -591,7 +560,10 @@ def super_admin_dialog():
         else: st.error("Code incorrect")
 
 @st.dialog("✏️ Modifier l'atelier")
-def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
+def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, max_enfants_actuel, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
+    """
+    MODIF v34 : ajout du champ max_enfants par atelier dans la modale d'édition.
+    """
     if not lieux_list:
         st.error("Aucun lieu disponible. Veuillez d'abord créer des lieux dans l'onglet 'Lieux / Horaires'.")
         return
@@ -601,33 +573,62 @@ def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, 
     try:
         inscriptions = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", at_id).execute()
         total_occupation = sum([1 + ins['nb_enfants'] for ins in inscriptions.data]) if inscriptions.data else 0
+        nb_enfants_actuels = sum([ins['nb_enfants'] for ins in inscriptions.data]) if inscriptions.data else 0
     except:
         total_occupation = 0
+        nb_enfants_actuels = 0
+
     lieux_options = [l['nom'] for l in lieux_list]
     horaires_options = [h['libelle'] for h in horaires_list]
     lieu_actuel_nom = next((l['nom'] for l in lieux_list if l['id'] == lieu_id_actuel), lieux_options[0])
     horaire_actuel_lib = next((h['libelle'] for h in horaires_list if h['id'] == horaire_id_actuel), horaires_options[0])
+
     nouveau_titre = st.text_input("Titre", value=titre_actuel)
     nouveau_lieu = st.selectbox("Lieu", options=lieux_options, index=lieux_options.index(lieu_actuel_nom) if lieu_actuel_nom in lieux_options else 0)
     nouvel_horaire = st.selectbox("Horaire", options=horaires_options, index=horaires_options.index(horaire_actuel_lib) if horaire_actuel_lib in horaires_options else 0)
     nouvelle_capacite = st.number_input("Capacité maximale (places totales)", min_value=1, value=int(capacite_actuelle))
+
+    # --- MODIF v34 : Nouveau champ max_enfants par atelier ---
+    st.markdown("---")
+    st.markdown("**👶 Limite d'enfants pour cet atelier**")
+    val_max_enf = max_enfants_actuel if max_enfants_actuel is not None else MAX_ENFANTS
+    nouvelle_limite_enfants = st.number_input(
+        "Nombre maximum d'enfants acceptés sur cet atelier",
+        min_value=0,
+        max_value=200,
+        value=int(val_max_enf),
+        help=f"Valeur globale configurée : {MAX_ENFANTS}. Mettre 0 pour utiliser la valeur globale."
+    )
+    if nouvelle_limite_enfants == 0:
+        st.caption(f"ℹ️ La limite globale ({MAX_ENFANTS} enfants) sera appliquée.")
+    else:
+        st.caption(f"ℹ️ Limite spécifique : {nouvelle_limite_enfants} enfants pour cet atelier.")
+
     if nouvelle_capacite < total_occupation:
         st.error(f"La capacité ne peut pas être inférieure au nombre actuel d'occupants ({total_occupation} places prises).")
+
+    if nouvelle_limite_enfants > 0 and nouvelle_limite_enfants < nb_enfants_actuels:
+        st.error(f"La limite d'enfants ne peut pas être inférieure au nombre d'enfants déjà inscrits ({nb_enfants_actuels}).")
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Annuler", use_container_width=True):
             st.rerun()
     with col2:
-        if st.button("Enregistrer", type="primary", use_container_width=True, disabled=(nouvelle_capacite < total_occupation)):
+        disable_save = (nouvelle_capacite < total_occupation) or (nouvelle_limite_enfants > 0 and nouvelle_limite_enfants < nb_enfants_actuels)
+        if st.button("Enregistrer", type="primary", use_container_width=True, disabled=disable_save):
             nouveau_lieu_id = next(l['id'] for l in lieux_list if l['nom'] == nouveau_lieu)
             nouvel_horaire_id = next(h['id'] for h in horaires_list if h['libelle'] == nouvel_horaire)
+            # Stocker None si 0 (= utiliser le global)
+            val_a_stocker = nouvelle_limite_enfants if nouvelle_limite_enfants > 0 else None
             supabase.table("ateliers").update({
                 "titre": nouveau_titre,
                 "lieu_id": nouveau_lieu_id,
                 "horaire_id": nouvel_horaire_id,
-                "capacite_max": nouvelle_capacite
+                "capacite_max": nouvelle_capacite,
+                "max_enfants": val_a_stocker
             }).eq("id", at_id).execute()
-            enregistrer_log("Admin", "Modification atelier", f"Atelier ID {at_id} modifié : titre={nouveau_titre}, lieu={nouveau_lieu}, horaire={nouvel_horaire}, capacité={nouvelle_capacite}")
+            enregistrer_log("Admin", "Modification atelier", f"Atelier ID {at_id} modifié : titre={nouveau_titre}, lieu={nouveau_lieu}, horaire={nouvel_horaire}, capacité={nouvelle_capacite}, max_enfants={val_a_stocker}")
             st.success("Atelier modifié avec succès !")
             st.rerun()
 
@@ -677,7 +678,6 @@ def dialog_retirer_animateur(at_id, titre_at, anim_id, anim_nom, auteur="Admin")
                 st.rerun()
             else:
                 st.error(f"Erreur : {result}")
-
 
 @st.dialog("✏️ Modifier un lieu")
 def edit_lieu_dialog(lieu_id, nom_actuel, capacite_actuelle):
@@ -743,7 +743,7 @@ if 'at_list_gen' not in st.session_state: st.session_state['at_list_gen'] = []
 if 'super_access' not in st.session_state: st.session_state['super_access'] = False
 
 current_code = get_secret_code()
-MAX_ENFANTS = get_max_enfants()
+MAX_ENFANTS = get_max_enfants()  # valeur globale (fallback)
 
 # --- Chargement sécurisé des adhérents ---
 try:
@@ -772,7 +772,6 @@ if user_connecte != "Choisir...":
 
 st.sidebar.markdown("---")
 
-# Construction du menu sidebar
 menu_options = ["📝 Inscriptions", "📊 Suivi & Récap", "🔐 Administration"]
 if est_animateur_connecte:
     menu_options = ["🎯 Animateur"] + menu_options
@@ -925,12 +924,13 @@ elif menu == "📝 Inscriptions":
                         ins_data = []
 
                     anim_id_at = at.get('animateur_id')
+                    # MODIF v34 : utiliser la limite spécifique à l'atelier
+                    max_enf_at = get_max_enfants_atelier(at)
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                     restantes = at['capacite_max'] - total_occ
 
-                    # Calcul du nombre total d'enfants inscrits (hors animateur)
                     nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data if i['adherent_id'] != anim_id_at])
-                    atelier_enfants_complet = nb_enfants_inscrits >= MAX_ENFANTS
+                    atelier_enfants_complet = nb_enfants_inscrits >= max_enf_at
 
                     statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
@@ -975,16 +975,15 @@ elif menu == "📝 Inscriptions":
                             if qui_est_anim:
                                 st.warning("🔒 Cette personne est l'animateur de cet atelier. Son inscription est gérée automatiquement.")
                             elif atelier_enfants_complet and qui != "Choisir...":
-                                st.warning(f"🚫 Le nombre maximum d'enfants ({MAX_ENFANTS}) est atteint pour cet atelier.")
+                                st.warning(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) est atteint pour cet atelier.")
                             elif c3.button("Valider", key=f"v_{at['id']}", type="primary"):
                                 if qui != "Choisir...":
                                     id_adh = dict_adh[qui]
                                     existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
                                     if existing:
-                                        # Vérifier si ajout d'enfants dépasse le max
                                         delta_enf = nb_e - existing['nb_enfants']
-                                        if nb_enfants_inscrits + delta_enf > MAX_ENFANTS:
-                                            st.error(f"🚫 Le nombre maximum d'enfants ({MAX_ENFANTS}) serait dépassé.")
+                                        if nb_enfants_inscrits + delta_enf > max_enf_at:
+                                            st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
                                         elif restantes - delta_enf < 0:
                                             st.error("Manque de places")
                                         else:
@@ -992,8 +991,8 @@ elif menu == "📝 Inscriptions":
                                             enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
                                             st.rerun()
                                     else:
-                                        if nb_enfants_inscrits + nb_e > MAX_ENFANTS:
-                                            st.error(f"🚫 Le nombre maximum d'enfants ({MAX_ENFANTS}) serait dépassé.")
+                                        if nb_enfants_inscrits + nb_e > max_enf_at:
+                                            st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
                                         elif restantes - (1 + nb_e) < 0:
                                             st.error("Manque de places")
                                         else:
@@ -1128,13 +1127,11 @@ elif menu == "🔐 Administration":
             submitted = st.form_submit_button("✅ Valider", type="primary", use_container_width=True)
         if st.button("🔑 Code Super Admin", use_container_width=True):
             super_admin_dialog()
-        
         if submitted and pw == current_code:
             st.session_state["admin_auth"] = True
             st.rerun()
         st.stop()
 
-    # ---------- Onglets d'administration ----------
     t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs([
         "🏗️ Ateliers", "📊 Suivi AM", "📅 Planning Ateliers",
         "📈 Statistiques de participation", "👥 Liste AM",
@@ -1163,20 +1160,17 @@ elif menu == "🔐 Administration":
         st.markdown("**Mode**")
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("📦 Générateur",
-                         use_container_width=True,
+            if st.button("📦 Générateur", use_container_width=True,
                          type="primary" if st.session_state["admin_atelier_mode"] == "Générateur" else "secondary"):
                 st.session_state["admin_atelier_mode"] = "Générateur"
                 st.rerun()
         with col2:
-            if st.button("📋 Répertoire",
-                         use_container_width=True,
+            if st.button("📋 Répertoire", use_container_width=True,
                          type="primary" if st.session_state["admin_atelier_mode"] == "Répertoire" else "secondary"):
                 st.session_state["admin_atelier_mode"] = "Répertoire"
                 st.rerun()
         with col3:
-            if st.button("⚡ Actions groupées",
-                         use_container_width=True,
+            if st.button("⚡ Actions groupées", use_container_width=True,
                          type="primary" if st.session_state["admin_atelier_mode"] == "Actions groupées" else "secondary"):
                 st.session_state["admin_atelier_mode"] = "Actions groupées"
                 st.rerun()
@@ -1211,6 +1205,7 @@ elif menu == "🔐 Administration":
                                 "Lieu": lieu_val,
                                 "Horaire": horaire_val,
                                 "Capacité": capa,
+                                "Max Enfants": MAX_ENFANTS,
                                 "Actif": False,
                                 "Verrouillé": False
                             })
@@ -1218,7 +1213,6 @@ elif menu == "🔐 Administration":
                     st.session_state['at_list_gen'] = tmp
                     st.rerun()
                 if st.session_state['at_list_gen']:
-                    # Tableau police noire sur fond blanc
                     st.markdown("""
                     <style>
                     [data-testid="stDataFrame"] { background-color: #ffffff !important; color: #000000 !important; }
@@ -1234,8 +1228,12 @@ elif menu == "🔐 Administration":
                         column_config={
                             "Lieu": st.column_config.SelectboxColumn(options=l_list, required=False),
                             "Horaire": st.column_config.SelectboxColumn(options=h_list, required=False),
+                            "Max Enfants": st.column_config.NumberColumn(
+                                min_value=0, max_value=200,
+                                help=f"0 = utiliser la valeur globale ({MAX_ENFANTS})"
+                            ),
                             "Actif": st.column_config.CheckboxColumn(default=False),
-                            "Verrouillé": st.column_config.CheckboxColumn(default=False, help="Si coché, seul l'admin peut gérer les inscriptions")
+                            "Verrouillé": st.column_config.CheckboxColumn(default=False)
                         },
                         use_container_width=True,
                         key="editor_ateliers"
@@ -1258,12 +1256,14 @@ elif menu == "🔐 Administration":
                             if not date_iso:
                                 st.error(f"Format de date invalide : {r['Date']}")
                                 st.stop()
+                            max_enf_val = int(r.get('Max Enfants', MAX_ENFANTS))
                             to_db.append({
                                 "date_atelier": date_iso,
                                 "titre": r['Titre'],
                                 "lieu_id": map_l_id[lieu_nom],
                                 "horaire_id": map_h_id[horaire_lib],
                                 "capacite_max": int(r['Capacité']),
+                                "max_enfants": max_enf_val if max_enf_val > 0 else None,
                                 "est_actif": bool(r['Actif']),
                                 "est_verrouille": bool(r.get("Verrouillé", False))
                             })
@@ -1308,11 +1308,17 @@ elif menu == "🔐 Administration":
                         if anim_adh:
                             anim_nom_rep = f"{anim_adh['prenom']} {anim_adh['nom']}"
                     anim_label_rep = f" | ⭐ {anim_nom_rep}" if anim_nom_rep else ""
-                    ca, cb, cc, cd, ce, cf_anim = st.columns([0.42, 0.1, 0.1, 0.1, 0.1, 0.18])
-                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}{anim_label_rep}")
+
+                    # MODIF v34 : affichage de la limite d'enfants par atelier
+                    max_enf_rep = a.get('max_enfants')
+                    label_max_enf = f" | 👶 max {max_enf_rep} enf." if max_enf_rep else f" | 👶 max {MAX_ENFANTS} enf. (global)"
+
+                    ca, cb, cc, cd, ce, cf_anim = st.columns([0.38, 0.1, 0.1, 0.1, 0.1, 0.22])
+                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}{anim_label_rep}{label_max_enf}")
                     btn_l = "🔴 Désactiver" if a['est_actif'] else "🟢 Activer"
                     if cb.button(btn_l, key=f"at_stat_{a['id']}"):
-                        supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute(); st.rerun()
+                        supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute()
+                        st.rerun()
                     btn_v = "🔓 Déverrouiller" if is_verrouille(a) else "🔒 Verrouiller"
                     if cc.button(btn_v, key=f"at_verr_{a['id']}"):
                         nouvel_etat = not is_verrouille(a)
@@ -1321,7 +1327,12 @@ elif menu == "🔐 Administration":
                         enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date_atelier']} {etat_str}")
                         st.rerun()
                     if cd.button("✏️", key=f"at_edit_{a['id']}"):
-                        edit_atelier_dialog(a['id'], a['titre'], a['lieu_id'], a['horaire_id'], a['capacite_max'], l_raw, h_raw, map_l_id, map_h_id)
+                        # MODIF v34 : passer max_enfants_actuel à la modale
+                        edit_atelier_dialog(
+                            a['id'], a['titre'], a['lieu_id'], a['horaire_id'],
+                            a['capacite_max'], a.get('max_enfants'),
+                            l_raw, h_raw, map_l_id, map_h_id
+                        )
                     if ce.button("🗑️", key=f"at_del_{a['id']}"):
                         try:
                             cnt = supabase.table("inscriptions").select("id", count="exact").eq("atelier_id", a['id']).execute().count or 0
@@ -1394,7 +1405,6 @@ elif menu == "🔐 Administration":
     with t3:  # PLANNING ATELIERS (Admin)
         st.subheader("📅 Planning des Ateliers")
 
-        # Filtre vert menthe
         st.markdown("**Filtrer par statut :**")
         options_filtre_plan = ("Tous", "Actifs", "Inactifs")
         if "filtre_plan_admin" not in st.session_state:
@@ -1403,16 +1413,11 @@ elif menu == "🔐 Administration":
         col_f1, col_f2, col_f3, col_f_rest = st.columns([1, 1, 1, 5])
         for col_f, opt in zip([col_f1, col_f2, col_f3], options_filtre_plan):
             actif = st.session_state["filtre_plan_admin"] == opt
-            bg = "#b2dfdb" if actif else "white"
-            fw = "bold" if actif else "normal"
             with col_f:
-                if st.button(opt, key=f"filtre_plan_{opt}",
-                             help=f"Filtrer : {opt}",
-                             use_container_width=True):
+                if st.button(opt, key=f"filtre_plan_{opt}", help=f"Filtrer : {opt}", use_container_width=True):
                     st.session_state["filtre_plan_admin"] = opt
                     st.rerun()
 
-        # Style vert menthe sur les boutons filtre
         st.markdown("""
         <style>
         [data-testid="column"]:nth-child(1) button, [data-testid="column"]:nth-child(2) button, [data-testid="column"]:nth-child(3) button {
@@ -1553,6 +1558,7 @@ elif menu == "🔐 Administration":
             st.info("Aucun atelier trouvé sur cette période.")
 
     with t4:  # STATISTIQUES
+        # MODIF v34 : suppression du surligné — remplacement de st.table() par st.dataframe()
         st.subheader("📈 Statistiques de participation")
         cs1, cs2 = st.columns(2)
         ds_stat = cs1.date_input("Date début", date.today().replace(day=1), key="stat_d1", format="DD/MM/YYYY")
@@ -1583,18 +1589,18 @@ elif menu == "🔐 Administration":
                 am_id = dict_adh[am_nom]
                 count = sum(1 for x in filtered_ins if x['adherent_id'] == am_id)
                 stats_list.append({"Assistante Maternelle": am_nom, "Nombre d'ateliers": count})
-            df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False)
+            df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False).reset_index(drop=True)
 
-            # Affichage tableau : police noire sur fond blanc, sans colonne ID
-            st.markdown("""
-            <style>
-            [data-testid="stTable"] { background-color: #ffffff !important; color: #000000 !important; }
-            [data-testid="stTable"] * { color: #000000 !important; }
-            [data-testid="stTable"] th { background-color: #f0f0f0 !important; color: #000000 !important; }
-            [data-testid="stTable"] td { background-color: #ffffff !important; color: #000000 !important; }
-            </style>
-            """, unsafe_allow_html=True)
-            st.table(df_stats)  # Affiche uniquement "Assistante Maternelle" et "Nombre d'ateliers"
+            # MODIF v34 : st.dataframe() sans surligné au lieu de st.table()
+            st.dataframe(
+                df_stats,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Assistante Maternelle": st.column_config.TextColumn("Assistante Maternelle"),
+                    "Nombre d'ateliers": st.column_config.NumberColumn("Nombre d'ateliers"),
+                }
+            )
 
             total_inscr = df_stats["Nombre d'ateliers"].sum()
             st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
@@ -1605,13 +1611,11 @@ elif menu == "🔐 Administration":
                     date_fr = format_date_fr_simple(at['date_atelier'])
                     st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu_nom']} - {at['horaire_lib']})")
             ce_s1, ce_s2 = st.columns(2)
-            # Export Excel avec période
             ce_s1.download_button(
                 "📥 Excel Statistiques",
                 data=export_to_excel_with_period(df_stats, ds_stat, de_stat, "Statistiques de participation"),
                 file_name=f"stats_am_{ds_stat}_{de_stat}.xlsx"
             )
-            # Export PDF avec période
             pdf_stat_lines = []
             for _, r in df_stats.iterrows():
                 pdf_stat_lines.append(f"{r['Assistante Maternelle']} : {r['Nombre d\'ateliers']} atelier(s)")
@@ -1672,7 +1676,6 @@ elif menu == "🔐 Administration":
             nb_inactives = len(adh_data_admin) - nb_actives
             st.markdown("---")
 
-            # Filtre vert menthe pour la liste AM
             st.markdown("**Filtrer :**")
             options_filtre_am = ("Tous", "Actifs", "Inactifs")
             if "filtre_liste_am" not in st.session_state:
@@ -1697,7 +1700,6 @@ elif menu == "🔐 Administration":
                 est_anim = u.get('est_animateur', False)
                 est_actif_am = u.get('est_actif', True)
 
-                # Appliquer le filtre
                 if filtre_am_actuel == "Actifs" and not est_actif_am:
                     continue
                 if filtre_am_actuel == "Inactifs" and est_actif_am:
@@ -1728,9 +1730,7 @@ elif menu == "🔐 Administration":
                     if c_actif.button("🟢 Actif", key=f"am_actif_{u['id']}"):
                         today_str = str(date.today())
                         try:
-                            res_ins_futures = supabase.table("inscriptions").select(
-                                "id, ateliers(date_atelier, titre)"
-                            ).eq("adherent_id", u['id']).execute()
+                            res_ins_futures = supabase.table("inscriptions").select("id, ateliers(date_atelier, titre)").eq("adherent_id", u['id']).execute()
                             ins_futures = [
                                 i for i in (res_ins_futures.data or [])
                                 if i.get('ateliers') and i['ateliers'].get('date_atelier', '') >= today_str
@@ -1847,7 +1847,6 @@ elif menu == "🔐 Administration":
     with t7:  # ⚙️ SÉCURITÉ
         st.subheader("⚙️ Sécurité & Configuration")
 
-        # Changement du code admin
         st.markdown("**🔑 Changer le code administrateur**")
         with st.form("sec_form"):
             o, n = st.text_input("Ancien code", type="password"), st.text_input("Nouveau code", type="password")
@@ -1864,27 +1863,23 @@ elif menu == "🔐 Administration":
 
         st.markdown("---")
 
-        # Configuration du nombre maximum d'enfants
-        st.markdown("**👶 Nombre maximum d'enfants par atelier**")
+        st.markdown("**👶 Nombre maximum d'enfants par défaut (global)**")
         current_max = get_max_enfants()
-        st.info(f"Valeur actuelle : **{current_max} enfants** maximum par atelier.")
+        st.info(f"Valeur actuelle : **{current_max} enfants** — utilisée pour les ateliers sans limite spécifique.")
         with st.form("max_enfants_form"):
             nouveau_max = st.number_input(
-                "Nombre maximum d'enfants autorisés par atelier",
-                min_value=1,
-                max_value=100,
-                value=current_max,
-                help="Par défaut : 20. Ce nombre limite le total d'enfants pouvant s'inscrire à un même atelier."
+                "Nombre maximum d'enfants par défaut",
+                min_value=1, max_value=100, value=current_max,
+                help="Valeur appliquée aux ateliers dont le champ 'Max Enfants' est vide ou à 0."
             )
-            if st.form_submit_button("💾 Enregistrer la limite"):
+            if st.form_submit_button("💾 Enregistrer la limite globale"):
                 result = set_max_enfants(nouveau_max)
                 if result is True:
-                    enregistrer_log("Admin", "Configuration", f"Nombre max enfants par atelier modifié : {nouveau_max}")
-                    st.success(f"✅ Limite mise à jour : {nouveau_max} enfants maximum par atelier.")
+                    enregistrer_log("Admin", "Configuration", f"Nombre max enfants global modifié : {nouveau_max}")
+                    st.success(f"✅ Limite globale mise à jour : {nouveau_max} enfants.")
                     st.rerun()
                 else:
-                    st.error(f"Erreur lors de la mise à jour : {result}")
-                    st.info("💡 Si la colonne 'max_enfants' n'existe pas dans votre table 'configuration', ajoutez-la dans Supabase (type integer, valeur par défaut 20).")
+                    st.error(f"Erreur : {result}")
 
         st.markdown("---")
 
@@ -1904,12 +1899,6 @@ elif menu == "🔐 Administration":
             if res_logs.data:
                 logs_df = pd.DataFrame(res_logs.data)
                 logs_df['created_at'] = pd.to_datetime(logs_df['created_at'], utc=True).dt.tz_convert("Europe/Paris").dt.strftime('%d/%m/%Y %H:%M')
-                # Tableau police noire sur fond blanc
-                st.markdown("""
-                <style>
-                [data-testid="stDataFrame"] iframe { background-color: #ffffff !important; }
-                </style>
-                """, unsafe_allow_html=True)
                 st.dataframe(
                     logs_df[['created_at', 'utilisateur', 'action', 'details']],
                     column_config={
@@ -1927,12 +1916,24 @@ elif menu == "🔐 Administration":
             st.info("ℹ️ Le journal des actions sera disponible une fois que des opérations auront été effectuées.")
 
     with t9:  # 🎯 ANIMATEUR (Admin)
+        # MODIF v34 : filtre par période + suppression du bouton ✏️ doublon
         st.subheader("🎯 Espace Animateur (accès Administration)")
         st.markdown(f'<div style="background-color:#fff3e0; border:1px solid #e65100; border-radius:8px; padding:10px 16px; margin-bottom:16px; color:#e65100; font-weight:bold;">⭐ Vous accédez à la vue animateur en tant qu\'administrateur.</div>', unsafe_allow_html=True)
 
-        today_str = str(date.today())
+        # MODIF v34 : filtre par période
+        ca_d1, ca_d2 = st.columns(2)
+        anim_d_debut = ca_d1.date_input("Du", date.today(), key="anim_adm_d1", format="DD/MM/YYYY")
+        anim_d_fin = ca_d2.date_input("Au", date.today() + timedelta(days=30), key="anim_adm_d2", format="DD/MM/YYYY")
+
         try:
-            ateliers_bruts_anim = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data or []
+            ateliers_bruts_anim = (
+                supabase.table("ateliers").select("*")
+                .eq("est_actif", True)
+                .gte("date_atelier", str(anim_d_debut))
+                .lte("date_atelier", str(anim_d_fin))
+                .order("date_atelier")
+                .execute().data or []
+            )
         except:
             ateliers_bruts_anim = []
 
@@ -1945,7 +1946,7 @@ elif menu == "🔐 Administration":
             ateliers_anim.append(at)
 
         if not ateliers_anim:
-            st.info("ℹ️ Aucun atelier à venir.")
+            st.info("ℹ️ Aucun atelier actif sur cette période.")
         else:
             for at in ateliers_anim:
                 anim_id_at = at.get('animateur_id')
@@ -1978,12 +1979,13 @@ elif menu == "🔐 Administration":
 
                     st.markdown("**Animateur de cet atelier :**")
                     if anim_id_at and anim_nom_at:
+                        # MODIF v34 : suppression du bouton ✏️ doublon, seul 🔄 Changer reste
                         col_anim1, col_anim2, col_anim3 = st.columns([2, 1, 1])
                         col_anim1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {anim_nom_at}</span>', unsafe_allow_html=True)
                         anim_ins_cur = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
                         nb_anim_cur = anim_ins_cur['nb_enfants'] if anim_ins_cur else 1
-                        new_nb_anim = col_anim2.number_input("Enf.", 0, 10, int(nb_anim_cur), key=f"adm_anim_nb2_{at['id']}", label_visibility="collapsed")
-                        if col_anim2.button("✏️", key=f"adm_anim_mod_nb2_{at['id']}"):
+                        new_nb_anim = col_anim2.number_input("Nb enfants", 0, 10, int(nb_anim_cur), key=f"adm_anim_nb2_{at['id']}")
+                        if col_anim2.button("💾 Sauver", key=f"adm_anim_save_nb2_{at['id']}"):
                             if anim_ins_cur:
                                 supabase.table("inscriptions").update({"nb_enfants": new_nb_anim}).eq("id", anim_ins_cur['id']).execute()
                                 enregistrer_log("Admin", "Modif nb enfants animateur", f"{anim_nom_at} → {new_nb_anim} enf. - {at_info_log}")
@@ -2027,7 +2029,6 @@ elif menu == "🔐 Administration":
                             if cp4.button("🗑️", key=f"adm_del2_{p['id']}"):
                                 confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, "Admin")
 
-    # Bouton de déconnexion administration dans la sidebar
     if st.sidebar.button("🚪 Déconnexion administration"):
         st.session_state["admin_auth"] = False
         st.rerun()
