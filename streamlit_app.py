@@ -2019,7 +2019,7 @@ elif menu == "🔐 Administration":
         if not ateliers_anim:
             st.info("ℹ️ Aucun atelier actif sur cette période.")
         else:
-            for idx, at in enumerate(ateliers_anim):  # Ajout de l'index
+            for idx, at in enumerate(ateliers_anim):
                 anim_id_at = at.get('animateur_id')
                 try:
                     res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
@@ -2052,11 +2052,16 @@ elif menu == "🔐 Administration":
                 anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
                 titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{anim_label}"
 
+                # Clés pour les session state
+                nb_key = f"adm_anim_nb_{at['id']}_{idx}"
+                if nb_key not in st.session_state:
+                    st.session_state[nb_key] = anim_ins['nb_enfants'] if anim_ins else 1
+
                 with st.expander(titre_label, expanded=False):
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                     st.markdown("**Gestion de l'animateur :**")
 
-                    # Sélection de l'animateur (clé unique avec idx)
+                    # Sélection de l'animateur
                     options_anim = ["Choisir..."] + liste_adh_anim
                     if anim_nom_at and anim_nom_at in liste_adh_anim:
                         idx_def = liste_adh_anim.index(anim_nom_at) + 1
@@ -2064,9 +2069,8 @@ elif menu == "🔐 Administration":
                         idx_def = 0
                     nouvel_anim = st.selectbox("Animateur à assigner", options_anim, index=idx_def, key=f"adm_anim_select_{at['id']}_{idx}")
 
-                    # Nombre d'enfants (clé unique avec idx)
-                    nb_enf_actuel = anim_ins['nb_enfants'] if anim_ins else 1
-                    nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=int(nb_enf_actuel), key=f"adm_anim_nb_{at['id']}_{idx}")
+                    # Nombre d'enfants avec valeur stockée en session
+                    nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=st.session_state[nb_key], key=nb_key)
 
                     if st.button("✅ Appliquer", key=f"adm_anim_apply_{at['id']}_{idx}", type="primary"):
                         if nouvel_anim == "Choisir...":
@@ -2081,18 +2085,43 @@ elif menu == "🔐 Administration":
                                 nouvelle_occupation = total_occ - (1 + ancien_nb) + (1 + nb_enf)
                                 nouveau_total_enfants = total_enfants_actuel - ancien_nb + nb_enf
                             elif ancien_anim_id == nouvel_anim_id:
-                                delta = nb_enf - nb_enf_actuel
+                                delta = nb_enf - (anim_ins['nb_enfants'] if anim_ins else 1)
                                 nouvelle_occupation = total_occ + delta
                                 nouveau_total_enfants = total_enfants_actuel + delta
                             else:
                                 nouvelle_occupation = total_occ + 1 + nb_enf
                                 nouveau_total_enfants = total_enfants_actuel + nb_enf
 
-                            # Vérifications
+                            # Calculer la valeur maximale possible pour le nombre d'enfants
+                            # contrainte 1 : places totales
+                            max_places_enf = max_enf_at - (total_enfants_actuel - (anim_ins['nb_enfants'] if anim_ins else 0)) if ancien_anim_id == nouvel_anim_id else max_enf_at - (total_enfants_actuel)
+                            # contrainte 2 : capacité totale
+                            max_capa_enf = (at['capacite_max'] - total_occ) + (anim_ins['nb_enfants'] if anim_ins and ancien_anim_id == nouvel_anim_id else 0)
+                            # Dans le cas d'un changement d'animateur, c'est plus complexe, mais simplifions :
+                            # On veut la valeur max que peut prendre nb_enf sans déclencher d'erreur.
+                            # On va calculer la marge:
+                            if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
+                                marge_enf = max_enf_at - (total_enfants_actuel - (anim_ins['nb_enfants'] if anim_ins else 0))
+                                marge_capa = at['capacite_max'] - (total_occ - (1 + (anim_ins['nb_enfants'] if anim_ins else 0)))
+                            elif ancien_anim_id == nouvel_anim_id:
+                                marge_enf = max_enf_at - total_enfants_actuel + (anim_ins['nb_enfants'] if anim_ins else 0)
+                                marge_capa = at['capacite_max'] - total_occ
+                            else:
+                                marge_enf = max_enf_at - total_enfants_actuel
+                                marge_capa = at['capacite_max'] - total_occ - 1  # car on ajoute un adulte
+
+                            max_autorise = min(marge_enf, marge_capa)
+                            if max_autorise < 0:
+                                max_autorise = 0
+
                             if nouveau_total_enfants > max_enf_at:
-                                st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
+                                st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé. Valeur maximale possible : {max_autorise}")
+                                st.session_state[nb_key] = max_autorise
+                                st.rerun()
                             elif nouvelle_occupation > at['capacite_max']:
-                                st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
+                                st.markdown(f"<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée. Valeur maximale possible : {max_autorise}</span>", unsafe_allow_html=True)
+                                st.session_state[nb_key] = max_autorise
+                                st.rerun()
                             else:
                                 # Appliquer les modifications
                                 if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
@@ -2105,6 +2134,8 @@ elif menu == "🔐 Administration":
                                     supabase.table("inscriptions").insert({"adherent_id": nouvel_anim_id, "atelier_id": at['id'], "nb_enfants": nb_enf}).execute()
                                 enregistrer_log("Admin", "Modification animateur", f"Animateur {nouvel_anim} ({nb_enf} enfants) - {at_info_log}")
                                 st.success("Modification effectuée !")
+                                # Remettre la session state à la nouvelle valeur (normale)
+                                st.session_state[nb_key] = nb_enf
                                 st.rerun()
                                 
     if st.sidebar.button("🚪 Déconnexion administration"):
