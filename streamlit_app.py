@@ -1788,7 +1788,8 @@ elif menu == "🔐 Administration":
             else:
                 for l in l_raw:
                     ca, cb_edit, cb_del = st.columns([0.65, 0.18, 0.17])
-                    ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(l[\"nom\"])}'>{l['nom']} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
+                    nom_lieu = l['nom']
+                    ca.markdown(f"<span class='lieu-badge' style='background-color:{get_color(nom_lieu)}'>{nom_lieu} (Cap: {l['capacite']})</span>", unsafe_allow_html=True)
                     if cb_edit.button("✏️", key=f"lx_edit_{l['id']}", help="Modifier"):
                         edit_lieu_dialog(l['id'], l['nom'], l['capacite'])
                     if cb_del.button("🗑️", key=f"lx_{l['id']}", help="Supprimer"):
