@@ -988,7 +988,7 @@ elif menu == "📝 Inscriptions":
                                         if nouveau_total_enfants > max_enf_at:
                                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
                                         elif nouveau_total_occupation > capacite_max:
-                                            st.error("Trop de monde")
+                                            st.error("Trop de monde capacité adulte et enfant dépassée")
                                         else:
                                             supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
                                             enregistrer_log(user_principal, "Modification", f"{n_f} → {new_nb} enfants - {at_info_log}")
@@ -1023,7 +1023,7 @@ elif menu == "📝 Inscriptions":
                                         if nouveau_total_enfants > max_enf_at:
                                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
                                         elif nouveau_total_occupation > capacite_max:
-                                            st.error("Trop de monde")
+                                            st.error("Trop de monde capacité adulte et enfant dépassée")
                                         else:
                                             supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
                                             enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
@@ -1034,7 +1034,7 @@ elif menu == "📝 Inscriptions":
                                         if nouveau_total_enfants > max_enf_at:
                                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
                                         elif nouveau_total_occupation > capacite_max:
-                                            st.error("Trop de monde")
+                                            st.error("Trop de monde capacité adulte et enfant dépassée")
                                         else:
                                             supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
                                             enregistrer_log(user_principal, "Inscription", f"{qui} s'inscrit (+{nb_e} enf.) - {at_info_log}")
