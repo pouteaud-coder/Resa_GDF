@@ -1540,7 +1540,7 @@ elif menu == "🔐 Administration":
                 ins_at = cache_ins_adm.get(a['id'], [])
                 t_ad = len(ins_at)
                 t_en = sum([p['nb_enfants'] for p in ins_at])
-                restantes = a['capacite_max'] - (t_ad + t_en)
+                restantes = a['capacite_max'] - (t_ad + t_en)  # places totales restantes (peut être négatif)
                 
                 # --- Calcul des places enfants restantes ---
                 max_enf_at = get_max_enfants_atelier(a)
@@ -1578,9 +1578,15 @@ elif menu == "🔐 Administration":
                         ca1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
                         new_nb_a = ca2.number_input("Enf.", 0, 10, int(anim_ins_plan['nb_enfants']), key=f"adm_anim_nb_{anim_ins_plan['id']}", label_visibility="collapsed")
                         if ca3.button("✏️ Modifier", key=f"adm_anim_mod_{anim_ins_plan['id']}"):
-                            supabase.table("inscriptions").update({"nb_enfants": new_nb_a}).eq("id", anim_ins_plan['id']).execute()
-                            enregistrer_log("Admin", "Modification nb enf. animateur", f"{n_a} → {new_nb_a} enf. - {at_info_log}")
-                            st.rerun()
+                            # Vérifier la capacité totale après modification
+                            delta = new_nb_a - anim_ins_plan['nb_enfants']
+                            nouvelle_occupation = t_ad + t_en + delta
+                            if nouvelle_occupation > a['capacite_max']:
+                                st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
+                            else:
+                                supabase.table("inscriptions").update({"nb_enfants": new_nb_a}).eq("id", anim_ins_plan['id']).execute()
+                                enregistrer_log("Admin", "Modification nb enf. animateur", f"{n_a} → {new_nb_a} enf. - {at_info_log}")
+                                st.rerun()
                         if ca4.button("❌ Retirer anim.", key=f"adm_anim_del_{a['id']}"):
                             dialog_retirer_animateur(a['id'], a['titre'], anim_id_at, n_a, "Admin")
                     for p in autres_plan_tries:
@@ -1589,9 +1595,15 @@ elif menu == "🔐 Administration":
                         cp1.write(f"• {n_f}")
                         new_nb = cp2.number_input("Enf.", 0, 10, int(p['nb_enfants']), key=f"adm_nb_{p['id']}", label_visibility="collapsed")
                         if cp3.button("✏️ Modifier", key=f"adm_mod_{p['id']}"):
-                            supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
-                            enregistrer_log("Admin", "Modification (admin)", f"{n_f} → {new_nb} enfants - {at_info_log}")
-                            st.rerun()
+                            # Vérifier la capacité totale après modification
+                            delta = new_nb - p['nb_enfants']
+                            nouvelle_occupation = t_ad + t_en + delta
+                            if nouvelle_occupation > a['capacite_max']:
+                                st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
+                            else:
+                                supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
+                                enregistrer_log("Admin", "Modification (admin)", f"{n_f} → {new_nb} enfants - {at_info_log}")
+                                st.rerun()
                         if cp4.button("🗑️", key=f"adm_del_plan_{p['id']}"):
                             confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, "Admin")
                 with st.expander(f"➕ Inscrire une AM à cet atelier", expanded=False):
@@ -1609,15 +1621,18 @@ elif menu == "🔐 Administration":
                                 id_adh = dict_adh[qui_adm]
                                 existing = next((ins for ins in ins_at if ins['adherent_id'] == id_adh), None)
                                 if existing:
-                                    if restantes - (nb_adm - existing['nb_enfants']) < 0:
-                                        st.error("Manque de places")
+                                    delta_enf = nb_adm - existing['nb_enfants']
+                                    nouvelle_occupation = t_ad + t_en + delta_enf
+                                    if nouvelle_occupation > a['capacite_max']:
+                                        st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
                                     else:
                                         supabase.table("inscriptions").update({"nb_enfants": nb_adm}).eq("id", existing['id']).execute()
                                         enregistrer_log("Admin", "Modification (admin)", f"{qui_adm} → {nb_adm} enfants - {at_info_log}")
                                         st.rerun()
                                 else:
-                                    if restantes - (1 + nb_adm) < 0:
-                                        st.error("Manque de places")
+                                    nouvelle_occupation = t_ad + t_en + 1 + nb_adm  # +1 pour l'adulte
+                                    if nouvelle_occupation > a['capacite_max']:
+                                        st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
                                     else:
                                         supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": a['id'], "nb_enfants": nb_adm}).execute()
                                         enregistrer_log("Admin", "Inscription (admin)", f"{qui_adm} inscrite (+{nb_adm} enf.) - {at_info_log}")
