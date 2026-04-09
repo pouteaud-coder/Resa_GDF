@@ -557,7 +557,7 @@ def super_admin_dialog():
         else: st.error("Code incorrect")
 
 @st.dialog("✏️ Modifier l'atelier")
-def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, max_enfants_actuel, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
+def edit_atelier_dialog(at_id, titre_actuel, date_actuelle, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, max_enfants_actuel, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
     if not lieux_list:
         st.error("Aucun lieu disponible. Veuillez d'abord créer des lieux dans l'onglet 'Lieux / Horaires'.")
         return
@@ -576,6 +576,10 @@ def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, 
     horaires_options = [h['libelle'] for h in horaires_list]
     lieu_actuel_nom = next((l['nom'] for l in lieux_list if l['id'] == lieu_id_actuel), lieux_options[0])
     horaire_actuel_lib = next((h['libelle'] for h in horaires_list if h['id'] == horaire_id_actuel), horaires_options[0])
+    
+    # Champ pour la date
+    date_actuelle_obj = datetime.strptime(date_actuelle, '%Y-%m-%d').date() if isinstance(date_actuelle, str) else date_actuelle
+    nouvelle_date = st.date_input("Date de l'atelier", value=date_actuelle_obj, format="DD/MM/YYYY")
 
     nouveau_titre = st.text_input("Titre", value=titre_actuel)
     nouveau_lieu = st.selectbox("Lieu", options=lieux_options, index=lieux_options.index(lieu_actuel_nom) if lieu_actuel_nom in lieux_options else 0)
@@ -614,13 +618,14 @@ def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, 
             nouvel_horaire_id = next(h['id'] for h in horaires_list if h['libelle'] == nouvel_horaire)
             val_a_stocker = nouvelle_limite_enfants if nouvelle_limite_enfants > 0 else None
             supabase.table("ateliers").update({
+                "date_atelier": nouvelle_date.strftime('%Y-%m-%d'),
                 "titre": nouveau_titre,
                 "lieu_id": nouveau_lieu_id,
                 "horaire_id": nouvel_horaire_id,
                 "capacite_max": nouvelle_capacite,
                 "max_enfants": val_a_stocker
             }).eq("id", at_id).execute()
-            enregistrer_log("Admin", "Modification atelier", f"Atelier ID {at_id} modifié : titre={nouveau_titre}, lieu={nouveau_lieu}, horaire={nouvel_horaire}, capacité={nouvelle_capacite}, max_enfants={val_a_stocker}")
+            enregistrer_log("Admin", "Modification atelier", f"Atelier ID {at_id} modifié : date={nouvelle_date}, titre={nouveau_titre}, lieu={nouveau_lieu}, horaire={nouvel_horaire}, capacité={nouvelle_capacite}, max_enfants={val_a_stocker}")
             st.success("Atelier modifié avec succès !")
             st.rerun()
 
@@ -1387,12 +1392,12 @@ elif menu == "🔐 Administration":
                         etat_str = "verrouillé" if nouvel_etat else "déverrouillé"
                         enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date_atelier']} {etat_str}")
                         st.rerun()
-                    if cd.button("✏️", key=f"at_edit_{a['id']}"):
-                        edit_atelier_dialog(
-                            a['id'], a['titre'], a['lieu_id'], a['horaire_id'],
-                            a['capacite_max'], a.get('max_enfants'),
-                            l_raw, h_raw, map_l_id, map_h_id
-                        )
+                     if cd.button("✏️", key=f"at_edit_{a['id']}"):
+                    edit_atelier_dialog(
+                        a['id'], a['titre'], a['date_atelier'], a['lieu_id'], a['horaire_id'],
+                        a['capacite_max'], a.get('max_enfants'),
+                        l_raw, h_raw, map_l_id, map_h_id
+                    )
                     if ce.button("🗑️", key=f"at_del_{a['id']}"):
                         try:
                             cnt = supabase.table("inscriptions").select("id", count="exact").eq("atelier_id", a['id']).execute().count or 0
