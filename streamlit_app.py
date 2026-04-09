@@ -139,7 +139,6 @@ def get_secret_code():
         return "1234"
 
 def get_max_enfants():
-    """Récupère le nombre maximum d'enfants global depuis la configuration."""
     try:
         res = supabase.table("configuration").select("max_enfants").eq("id", "main_config").execute()
         if res.data and res.data[0].get('max_enfants') is not None:
@@ -149,7 +148,6 @@ def get_max_enfants():
     return 20
 
 def set_max_enfants(valeur):
-    """Met à jour le nombre maximum d'enfants global dans la configuration."""
     try:
         supabase.table("configuration").update({"max_enfants": valeur}).eq("id", "main_config").execute()
         return True
@@ -157,11 +155,10 @@ def set_max_enfants(valeur):
         return str(e)
 
 def get_max_enfants_atelier(at):
-    """Retourne le max_enfants spécifique à l'atelier, ou le global si non défini."""
     val = at.get('max_enfants')
     if val is not None:
         return int(val)
-    return MAX_ENFANTS  # fallback sur le global
+    return MAX_ENFANTS
 
 def heure_paris_fr():
     jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -561,9 +558,6 @@ def super_admin_dialog():
 
 @st.dialog("✏️ Modifier l'atelier")
 def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, max_enfants_actuel, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
-    """
-    MODIF v34 : ajout du champ max_enfants par atelier dans la modale d'édition.
-    """
     if not lieux_list:
         st.error("Aucun lieu disponible. Veuillez d'abord créer des lieux dans l'onglet 'Lieux / Horaires'.")
         return
@@ -588,7 +582,6 @@ def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, 
     nouvel_horaire = st.selectbox("Horaire", options=horaires_options, index=horaires_options.index(horaire_actuel_lib) if horaire_actuel_lib in horaires_options else 0)
     nouvelle_capacite = st.number_input("Capacité maximale (places totales)", min_value=1, value=int(capacite_actuelle))
 
-    # --- MODIF v34 : Nouveau champ max_enfants par atelier ---
     st.markdown("---")
     st.markdown("**👶 Limite d'enfants pour cet atelier**")
     val_max_enf = max_enfants_actuel if max_enfants_actuel is not None else MAX_ENFANTS
@@ -619,7 +612,6 @@ def edit_atelier_dialog(at_id, titre_actuel, lieu_id_actuel, horaire_id_actuel, 
         if st.button("Enregistrer", type="primary", use_container_width=True, disabled=disable_save):
             nouveau_lieu_id = next(l['id'] for l in lieux_list if l['nom'] == nouveau_lieu)
             nouvel_horaire_id = next(h['id'] for h in horaires_list if h['libelle'] == nouvel_horaire)
-            # Stocker None si 0 (= utiliser le global)
             val_a_stocker = nouvelle_limite_enfants if nouvelle_limite_enfants > 0 else None
             supabase.table("ateliers").update({
                 "titre": nouveau_titre,
@@ -743,7 +735,7 @@ if 'at_list_gen' not in st.session_state: st.session_state['at_list_gen'] = []
 if 'super_access' not in st.session_state: st.session_state['super_access'] = False
 
 current_code = get_secret_code()
-MAX_ENFANTS = get_max_enfants()  # valeur globale (fallback)
+MAX_ENFANTS = get_max_enfants()
 
 # --- Chargement sécurisé des adhérents ---
 try:
@@ -779,7 +771,7 @@ if est_animateur_connecte:
 menu = st.sidebar.radio("Navigation", menu_options)
 
 # ==========================================
-# SECTION 🎯 ANIMATEUR
+# SECTION 🎯 ANIMATEUR (MODIFIÉE : LIMITE ENFANTS)
 # ==========================================
 if menu == "🎯 Animateur":
     st.header(f"🎯 Espace Animateur — {user_connecte}")
@@ -815,6 +807,10 @@ if menu == "🎯 Animateur":
             total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
             restantes = at['capacite_max'] - total_occ
 
+            # --- Calcul de la limite enfants pour cet atelier ---
+            max_enf_at = get_max_enfants_atelier(at)
+            total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])  # inclut animateur
+
             anim_nom_at = None
             if anim_id_at:
                 anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
@@ -840,7 +836,11 @@ if menu == "🎯 Animateur":
                     nb_anim_cur = anim_ins_cur['nb_enfants'] if anim_ins_cur else 1
                     new_nb_anim = col_anim2.number_input("Enf.", 0, 10, int(nb_anim_cur), key=f"anim_nb_{at['id']}", label_visibility="collapsed")
                     if col_anim2.button("✏️", key=f"anim_mod_nb_{at['id']}"):
-                        if anim_ins_cur:
+                        # Vérification limite enfants
+                        nouveau_total = total_enfants_actuel - nb_anim_cur + new_nb_anim
+                        if nouveau_total > max_enf_at:
+                            st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
+                        else:
                             supabase.table("inscriptions").update({"nb_enfants": new_nb_anim}).eq("id", anim_ins_cur['id']).execute()
                             enregistrer_log(user_connecte, "Modif nb enfants animateur", f"{anim_nom_at} → {new_nb_anim} enf. - {at_info_log}")
                             st.rerun()
@@ -866,9 +866,13 @@ if menu == "🎯 Animateur":
                         ca1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {n_a} <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
                         new_nb_a = ca2.number_input("Enf.", 0, 10, int(anim_ligne['nb_enfants']), key=f"anim_enf_list_{anim_ligne['id']}", label_visibility="collapsed")
                         if ca3.button("✏️ Modifier", key=f"anim_mod_list_{anim_ligne['id']}"):
-                            supabase.table("inscriptions").update({"nb_enfants": new_nb_a}).eq("id", anim_ligne['id']).execute()
-                            enregistrer_log(user_connecte, "Modification (animateur)", f"{n_a} → {new_nb_a} enfants - {at_info_log}")
-                            st.rerun()
+                            nouveau_total = total_enfants_actuel - anim_ligne['nb_enfants'] + new_nb_a
+                            if nouveau_total > max_enf_at:
+                                st.error(f"🚫 Limite d'enfants ({max_enf_at}) dépassée.")
+                            else:
+                                supabase.table("inscriptions").update({"nb_enfants": new_nb_a}).eq("id", anim_ligne['id']).execute()
+                                enregistrer_log(user_connecte, "Modification (animateur)", f"{n_a} → {new_nb_a} enfants - {at_info_log}")
+                                st.rerun()
                         ca4.write("🔒 _Animateur_")
 
                     for p in autres_tries:
@@ -877,14 +881,18 @@ if menu == "🎯 Animateur":
                         cp1.write(f"• {n_f}")
                         new_nb = cp2.number_input("Enf.", 0, 10, int(p['nb_enfants']), key=f"anim_nb_p_{p['id']}", label_visibility="collapsed")
                         if cp3.button("✏️ Modifier", key=f"anim_mod_p_{p['id']}"):
-                            supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
-                            enregistrer_log(user_connecte, "Modification (animateur)", f"{n_f} → {new_nb} enfants - {at_info_log}")
-                            st.rerun()
+                            nouveau_total = total_enfants_actuel - p['nb_enfants'] + new_nb
+                            if nouveau_total > max_enf_at:
+                                st.error(f"🚫 Limite d'enfants ({max_enf_at}) dépassée.")
+                            else:
+                                supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
+                                enregistrer_log(user_connecte, "Modification (animateur)", f"{n_f} → {new_nb} enfants - {at_info_log}")
+                                st.rerun()
                         if cp4.button("🗑️", key=f"anim_del_p_{p['id']}"):
                             confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, user_connecte)
 
 # ==========================================
-# SECTION 📝 INSCRIPTIONS
+# SECTION 📝 INSCRIPTIONS (MODIFIÉE : INCLUSION ENFANTS ANIMATEUR)
 # ==========================================
 elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
@@ -924,12 +932,12 @@ elif menu == "📝 Inscriptions":
                         ins_data = []
 
                     anim_id_at = at.get('animateur_id')
-                    # MODIF v34 : utiliser la limite spécifique à l'atelier
                     max_enf_at = get_max_enfants_atelier(at)
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                     restantes = at['capacite_max'] - total_occ
 
-                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])
+                    # MODIFICATION ICI : inclure les enfants de l'animateur
+                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])  # tous, y compris animateur
                     atelier_enfants_complet = nb_enfants_inscrits >= max_enf_at
 
                     statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
@@ -1001,7 +1009,7 @@ elif menu == "📝 Inscriptions":
                                             st.rerun()
 
 # ==========================================
-# SECTION 📊 SUIVI & RÉCAP
+# SECTION 📊 SUIVI & RÉCAP (inchangée)
 # ==========================================
 elif menu == "📊 Suivi & Récap":
     st.header("🔎 Consultation")
@@ -1114,7 +1122,7 @@ elif menu == "📊 Suivi & Récap":
             st.info("Aucun atelier trouvé sur cette période.")
 
 # ==========================================
-# SECTION 🔐 ADMINISTRATION
+# SECTION 🔐 ADMINISTRATION (inchangée, sauf la partie max_enfants déjà intégrée)
 # ==========================================
 elif menu == "🔐 Administration":
     if "admin_auth" not in st.session_state:
@@ -1308,11 +1316,8 @@ elif menu == "🔐 Administration":
                         if anim_adh:
                             anim_nom_rep = f"{anim_adh['prenom']} {anim_adh['nom']}"
                     anim_label_rep = f" | ⭐ {anim_nom_rep}" if anim_nom_rep else ""
-
-                    # MODIF v34 : affichage de la limite d'enfants par atelier
                     max_enf_rep = a.get('max_enfants')
                     label_max_enf = f" | 👶 max {max_enf_rep} enf." if max_enf_rep else f" | 👶 max {MAX_ENFANTS} enf. (global)"
-
                     ca, cb, cc, cd, ce, cf_anim = st.columns([0.38, 0.1, 0.1, 0.1, 0.1, 0.22])
                     ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}{anim_label_rep}{label_max_enf}")
                     btn_l = "🔴 Désactiver" if a['est_actif'] else "🟢 Activer"
@@ -1327,7 +1332,6 @@ elif menu == "🔐 Administration":
                         enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date_atelier']} {etat_str}")
                         st.rerun()
                     if cd.button("✏️", key=f"at_edit_{a['id']}"):
-                        # MODIF v34 : passer max_enfants_actuel à la modale
                         edit_atelier_dialog(
                             a['id'], a['titre'], a['lieu_id'], a['horaire_id'],
                             a['capacite_max'], a.get('max_enfants'),
@@ -1404,12 +1408,10 @@ elif menu == "🔐 Administration":
 
     with t3:  # PLANNING ATELIERS (Admin)
         st.subheader("📅 Planning des Ateliers")
-
         st.markdown("**Filtrer par statut :**")
         options_filtre_plan = ("Tous", "Actifs", "Inactifs")
         if "filtre_plan_admin" not in st.session_state:
             st.session_state["filtre_plan_admin"] = "Tous"
-
         col_f1, col_f2, col_f3, col_f_rest = st.columns([1, 1, 1, 5])
         for col_f, opt in zip([col_f1, col_f2, col_f3], options_filtre_plan):
             actif = st.session_state["filtre_plan_admin"] == opt
@@ -1417,7 +1419,6 @@ elif menu == "🔐 Administration":
                 if st.button(opt, key=f"filtre_plan_{opt}", help=f"Filtrer : {opt}", use_container_width=True):
                     st.session_state["filtre_plan_admin"] = opt
                     st.rerun()
-
         st.markdown("""
         <style>
         [data-testid="column"]:nth-child(1) button, [data-testid="column"]:nth-child(2) button, [data-testid="column"]:nth-child(3) button {
@@ -1425,9 +1426,7 @@ elif menu == "🔐 Administration":
         }
         </style>
         """, unsafe_allow_html=True)
-
         filtre_statut_plan = st.session_state["filtre_plan_admin"]
-
         c1_adm, c2_adm = st.columns(2)
         d_s_a = c1_adm.date_input("Du", date.today(), key="adm_plan_d1", format="DD/MM/YYYY")
         d_e_a = c2_adm.date_input("Au", d_s_a + timedelta(days=30), key="adm_plan_d2", format="DD/MM/YYYY")
@@ -1440,7 +1439,6 @@ elif menu == "🔐 Administration":
             ateliers_bruts = query.order("date_atelier").execute().data or []
         except:
             ateliers_bruts = []
-
         lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
         horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
         ateliers = []
@@ -1462,7 +1460,6 @@ elif menu == "🔐 Administration":
                         "Date": a['date_atelier'], "Atelier": a['titre'], "Lieu": a['lieu_nom'],
                         "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
                     })
-
         df_adm_at = pd.DataFrame(adm_ins_list) if adm_ins_list else pd.DataFrame(columns=["Date", "Atelier", "Lieu", "AM", "Enfants"])
         cea1, cea2 = st.columns(2)
         cea1.download_button("📥 Excel Planning (Admin)",
@@ -1485,21 +1482,17 @@ elif menu == "🔐 Administration":
                 cl_c = "alerte-complet" if restantes <= 0 else ""
                 verrou_icon = " 🔒" if is_verrouille(a) else ""
                 at_info_log = f"{a['date_atelier']} | {a['horaire_lib']} | {a['lieu_nom']}"
-
                 anim_nom_plan = None
                 if anim_id_at:
                     anim_adh_plan = next((x for x in adh_data if x['id'] == anim_id_at), None)
                     if anim_adh_plan:
                         anim_nom_plan = f"{anim_adh_plan['prenom']} {anim_adh_plan['nom']}"
                 anim_label_plan = f" | ⭐ {anim_nom_plan}" if anim_nom_plan else ""
-
                 st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
-
                 if ins_at:
                     anim_ins_plan = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
                     autres_plan = [p for p in ins_at if p['adherent_id'] != anim_id_at]
                     autres_plan_tries = sorted(autres_plan, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
-
                     if anim_ins_plan:
                         n_a = f"{anim_ins_plan['adherents']['prenom']} {anim_ins_plan['adherents']['nom']}"
                         ca1, ca2, ca3, ca4 = st.columns([0.42, 0.18, 0.18, 0.22])
@@ -1511,7 +1504,6 @@ elif menu == "🔐 Administration":
                             st.rerun()
                         if ca4.button("❌ Retirer anim.", key=f"adm_anim_del_{a['id']}"):
                             dialog_retirer_animateur(a['id'], a['titre'], anim_id_at, n_a, "Admin")
-
                     for p in autres_plan_tries:
                         n_f = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
                         cp1, cp2, cp3, cp4 = st.columns([0.45, 0.18, 0.18, 0.19])
@@ -1523,7 +1515,6 @@ elif menu == "🔐 Administration":
                             st.rerun()
                         if cp4.button("🗑️", key=f"adm_del_plan_{p['id']}"):
                             confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, "Admin")
-
                 with st.expander(f"➕ Inscrire une AM à cet atelier", expanded=False):
                     if not liste_adh:
                         st.info("Aucune AM enregistrée.")
@@ -1558,7 +1549,6 @@ elif menu == "🔐 Administration":
             st.info("Aucun atelier trouvé sur cette période.")
 
     with t4:  # STATISTIQUES
-        # MODIF v34 : suppression du surligné — remplacement de st.table() par st.dataframe()
         st.subheader("📈 Statistiques de participation")
         cs1, cs2 = st.columns(2)
         ds_stat = cs1.date_input("Date début", date.today().replace(day=1), key="stat_d1", format="DD/MM/YYYY")
@@ -1590,8 +1580,6 @@ elif menu == "🔐 Administration":
                 count = sum(1 for x in filtered_ins if x['adherent_id'] == am_id)
                 stats_list.append({"Assistante Maternelle": am_nom, "Nombre d'ateliers": count})
             df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False).reset_index(drop=True)
-
-            # MODIF v34 : st.dataframe() sans surligné au lieu de st.table()
             st.dataframe(
                 df_stats,
                 use_container_width=True,
@@ -1601,7 +1589,6 @@ elif menu == "🔐 Administration":
                     "Nombre d'ateliers": st.column_config.NumberColumn("Nombre d'ateliers"),
                 }
             )
-
             total_inscr = df_stats["Nombre d'ateliers"].sum()
             st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
             st.markdown(f"**Nombre d'ateliers proposés sur la période :** {nb_at_proposes}")
@@ -1647,7 +1634,6 @@ elif menu == "🔐 Administration":
 
     with t5:  # 👥 LISTE AM
         st.subheader("👥 Gestion des Assistantes Maternelles")
-
         with st.form("add_am"):
             c1, c2 = st.columns(2)
             nom = c1.text_input("Nom").upper().strip()
@@ -1662,25 +1648,21 @@ elif menu == "🔐 Administration":
                         st.error(f"Erreur lors de l'ajout : {str(e)}")
                 else:
                     st.warning("Veuillez renseigner le nom et le prénom.")
-
         try:
             res_adh_admin = supabase.table("adherents").select("*").order("nom").order("prenom").execute()
             adh_data_admin = res_adh_admin.data if res_adh_admin.data else []
         except:
             adh_data_admin = []
-
         if not adh_data_admin:
             st.info("ℹ️ Aucune assistante maternelle enregistrée. Utilisez le formulaire ci-dessus pour en ajouter.")
         else:
             nb_actives = sum(1 for u in adh_data_admin if u.get('est_actif', True))
             nb_inactives = len(adh_data_admin) - nb_actives
             st.markdown("---")
-
             st.markdown("**Filtrer :**")
             options_filtre_am = ("Tous", "Actifs", "Inactifs")
             if "filtre_liste_am" not in st.session_state:
                 st.session_state["filtre_liste_am"] = "Tous"
-
             col_am1, col_am2, col_am3, col_am_rest = st.columns([1, 1, 1, 5])
             for col_am, opt in zip([col_am1, col_am2, col_am3], options_filtre_am):
                 actif = st.session_state["filtre_liste_am"] == opt
@@ -1688,33 +1670,26 @@ elif menu == "🔐 Administration":
                     if st.button(opt, key=f"filtre_am_{opt}", use_container_width=True):
                         st.session_state["filtre_liste_am"] = opt
                         st.rerun()
-
             filtre_am_actuel = st.session_state["filtre_liste_am"]
-
             st.markdown(
                 f"**Liste des AM** ({nb_actives} actives, {nb_inactives} inactives) — "
                 f"⭐ statut animateur · 🟢/🔴 statut adhésion"
             )
-
             for u in adh_data_admin:
                 est_anim = u.get('est_animateur', False)
                 est_actif_am = u.get('est_actif', True)
-
                 if filtre_am_actuel == "Actifs" and not est_actif_am:
                     continue
                 if filtre_am_actuel == "Inactifs" and est_actif_am:
                     continue
-
                 style_nom = "color:#9e9e9e; text-decoration:line-through;" if not est_actif_am else ""
                 badge_inactif = ' <span style="background:#9e9e9e;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;font-weight:bold;">INACTIF</span>' if not est_actif_am else ''
                 anim_label_am = ' <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;font-weight:bold;">ANIMATEUR</span>' if est_anim else ''
-
                 c1, c_anim, c_actif, c_edit, c_del = st.columns([0.45, 0.2, 0.12, 0.12, 0.11])
                 c1.markdown(
                     f'<span style="{style_nom}"><strong>{u["nom"]}</strong> {u["prenom"]}</span>{anim_label_am}{badge_inactif}',
                     unsafe_allow_html=True
                 )
-
                 if est_anim:
                     if c_anim.button("⭐ Retirer anim.", key=f"am_anim_off_{u['id']}", disabled=not est_actif_am):
                         supabase.table("adherents").update({"est_animateur": False}).eq("id", u['id']).execute()
@@ -1725,7 +1700,6 @@ elif menu == "🔐 Administration":
                         supabase.table("adherents").update({"est_animateur": True}).eq("id", u['id']).execute()
                         enregistrer_log("Admin", "Attribution statut animateur", f"{u['prenom']} {u['nom']} devient animateur")
                         st.rerun()
-
                 if est_actif_am:
                     if c_actif.button("🟢 Actif", key=f"am_actif_{u['id']}"):
                         today_str = str(date.today())
@@ -1752,7 +1726,6 @@ elif menu == "🔐 Administration":
                         supabase.table("adherents").update({"est_actif": True}).eq("id", u['id']).execute()
                         enregistrer_log("Admin", "Réactivation AM", f"{u['prenom']} {u['nom']} passée en statut actif")
                         st.rerun()
-
                 if st.session_state.get(f"confirm_desact_{u['id']}"):
                     info = st.session_state[f"confirm_desact_{u['id']}"]
                     nb_ins = len(info["ins_futures"])
@@ -1770,7 +1743,6 @@ elif menu == "🔐 Administration":
                     if cb.button("❌ Annuler", key=f"cancel_desact_{u['id']}"):
                         del st.session_state[f"confirm_desact_{u['id']}"]
                         st.rerun()
-
                 if c_edit.button("✏️", key=f"am_edit_{u['id']}", help="Modifier le nom/prénom"):
                     edit_am_dialog(u['id'], u['nom'], u['prenom'])
                 if c_del.button("🗑️", key=f"am_del_{u['id']}"):
@@ -1846,7 +1818,6 @@ elif menu == "🔐 Administration":
 
     with t7:  # ⚙️ SÉCURITÉ
         st.subheader("⚙️ Sécurité & Configuration")
-
         st.markdown("**🔑 Changer le code administrateur**")
         with st.form("sec_form"):
             o, n = st.text_input("Ancien code", type="password"), st.text_input("Nouveau code", type="password")
@@ -1860,9 +1831,7 @@ elif menu == "🔐 Administration":
                         st.error(f"Erreur : {str(e)}")
                 else:
                     st.error("Ancien code incorrect")
-
         st.markdown("---")
-
         st.markdown("**👶 Nombre maximum d'enfants par défaut (global)**")
         current_max = get_max_enfants()
         st.info(f"Valeur actuelle : **{current_max} enfants** — utilisée pour les ateliers sans limite spécifique.")
@@ -1880,9 +1849,7 @@ elif menu == "🔐 Administration":
                     st.rerun()
                 else:
                     st.error(f"Erreur : {result}")
-
         st.markdown("---")
-
         if st.button("🚪 Déconnexion Super Admin"):
             st.session_state['super_access'] = False
             st.rerun()
@@ -1916,15 +1883,11 @@ elif menu == "🔐 Administration":
             st.info("ℹ️ Le journal des actions sera disponible une fois que des opérations auront été effectuées.")
 
     with t9:  # 🎯 ANIMATEUR (Admin)
-        # MODIF v34 : filtre par période + suppression du bouton ✏️ doublon
         st.subheader("🎯 Espace Animateur (accès Administration)")
         st.markdown(f'<div style="background-color:#fff3e0; border:1px solid #e65100; border-radius:8px; padding:10px 16px; margin-bottom:16px; color:#e65100; font-weight:bold;">⭐ Vous accédez à la vue animateur en tant qu\'administrateur.</div>', unsafe_allow_html=True)
-
-        # MODIF v34 : filtre par période
         ca_d1, ca_d2 = st.columns(2)
         anim_d_debut = ca_d1.date_input("Du", date.today(), key="anim_adm_d1", format="DD/MM/YYYY")
         anim_d_fin = ca_d2.date_input("Au", date.today() + timedelta(days=30), key="anim_adm_d2", format="DD/MM/YYYY")
-
         try:
             ateliers_bruts_anim = (
                 supabase.table("ateliers").select("*")
@@ -1936,7 +1899,6 @@ elif menu == "🔐 Administration":
             )
         except:
             ateliers_bruts_anim = []
-
         lieux_dict_anim = {l['id']: l['nom'] for l in st.session_state.lieux_list}
         horaires_dict_anim = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
         ateliers_anim = []
@@ -1944,22 +1906,18 @@ elif menu == "🔐 Administration":
             at['lieu_nom'] = lieux_dict_anim.get(at['lieu_id'], '?')
             at['horaire_lib'] = horaires_dict_anim.get(at['horaire_id'], '?')
             ateliers_anim.append(at)
-
         if not ateliers_anim:
             st.info("ℹ️ Aucun atelier actif sur cette période.")
         else:
             for at in ateliers_anim:
                 anim_id_at = at.get('animateur_id')
-
                 try:
                     res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
                     ins_data = res_ins.data if res_ins.data else []
                 except:
                     ins_data = []
-
                 total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                 restantes = at['capacite_max'] - total_occ
-
                 anim_nom_at = None
                 if anim_id_at:
                     anim_ins_check = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
@@ -1969,17 +1927,13 @@ elif menu == "🔐 Administration":
                         anim_adh_check = next((a for a in adh_data if a['id'] == anim_id_at), None)
                         if anim_adh_check:
                             anim_nom_at = f"{anim_adh_check['prenom']} {anim_adh_check['nom']}"
-
                 statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
                 anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
                 titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}{anim_label}"
-
                 with st.expander(titre_label, expanded=False):
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
-
                     st.markdown("**Animateur de cet atelier :**")
                     if anim_id_at and anim_nom_at:
-                        # MODIF v34 : suppression du bouton ✏️ doublon, seul 🔄 Changer reste
                         col_anim1, col_anim2, col_anim3 = st.columns([2, 1, 1])
                         col_anim1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {anim_nom_at}</span>', unsafe_allow_html=True)
                         anim_ins_cur = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
@@ -1997,15 +1951,12 @@ elif menu == "🔐 Administration":
                         col_an1.write("_Aucun animateur désigné_")
                         if col_an2.button("🎯 Désigner", key=f"adm_anim_set2_{at['id']}"):
                             dialog_attribuer_animateur(at['id'], at['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur="Admin")
-
                     st.markdown("---")
-
                     if ins_data:
                         st.markdown("**Inscrits :**")
                         anim_ligne = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
                         autres_lignes = [i for i in ins_data if i['adherent_id'] != anim_id_at]
                         autres_tries = sorted(autres_lignes, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
-
                         if anim_ligne:
                             n_a = f"{anim_ligne['adherents']['prenom']} {anim_ligne['adherents']['nom']}"
                             ca1, ca2, ca3, ca4 = st.columns([0.45, 0.18, 0.18, 0.19])
@@ -2016,7 +1967,6 @@ elif menu == "🔐 Administration":
                                 enregistrer_log("Admin", "Modification animateur (admin view)", f"{n_a} → {new_nb_a} enfants - {at_info_log}")
                                 st.rerun()
                             ca4.write("🔒 _Animateur_")
-
                         for p in autres_tries:
                             n_f = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
                             cp1, cp2, cp3, cp4 = st.columns([0.45, 0.18, 0.18, 0.19])
