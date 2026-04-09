@@ -1392,12 +1392,12 @@ elif menu == "🔐 Administration":
                         etat_str = "verrouillé" if nouvel_etat else "déverrouillé"
                         enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' du {a['date_atelier']} {etat_str}")
                         st.rerun()
-                     if cd.button("✏️", key=f"at_edit_{a['id']}"):
-                    edit_atelier_dialog(
+                    if cd.button("✏️", key=f"at_edit_{a['id']}"):
+                        edit_atelier_dialog(
                         a['id'], a['titre'], a['date_atelier'], a['lieu_id'], a['horaire_id'],
                         a['capacite_max'], a.get('max_enfants'),
                         l_raw, h_raw, map_l_id, map_h_id
-                    )
+                        )
                     if ce.button("🗑️", key=f"at_del_{a['id']}"):
                         try:
                             cnt = supabase.table("inscriptions").select("id", count="exact").eq("atelier_id", a['id']).execute().count or 0
