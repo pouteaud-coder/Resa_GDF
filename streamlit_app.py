@@ -950,7 +950,7 @@ elif menu == "📝 Inscriptions":
 
                     # Déterminer le statut d'affichage (uniquement sur les places enfants)
                     if places_enfants_restantes == 0:
-                        statut_enfants = "🚫 Enfants complet"
+                        statut_enfants = "🚫 Complet"
                     else:
                         statut_enfants = f"👶 {places_enfants_restantes} pl. enfants"
 
@@ -1146,7 +1146,7 @@ elif menu == "📊 Suivi & Récap":
                 nb_enfants_inscrits = t_en
                 places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                 if places_enfants_restantes == 0:
-                    statut_enfants = "🚫 Enfants complet"
+                    statut_enfants = "🚫 Complet"
                 else:
                     statut_enfants = f"👶 {places_enfants_restantes} pl. enfants"
                 
@@ -1384,7 +1384,7 @@ elif menu == "🔐 Administration":
                     
                     # Affichage des places enfants restantes
                     if a['places_enfants_restantes'] == 0:
-                        statut_enfants = "🚫 Enfants complet"
+                        statut_enfants = "🚫 Complet"
                     else:
                         statut_enfants = f"👶 {a['places_enfants_restantes']} pl. enfants"
                     
@@ -1562,7 +1562,7 @@ elif menu == "🔐 Administration":
                 nb_enfants_inscrits = t_en  # total enfants déjà inscrits (inclut animateur)
                 places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                 if places_enfants_restantes == 0:
-                    statut_enfants = "🚫 Enfants complet"
+                    statut_enfants = "🚫 Complet"
                 else:
                     statut_enfants = f"👶 {places_enfants_restantes} pl. enfants"
                 
