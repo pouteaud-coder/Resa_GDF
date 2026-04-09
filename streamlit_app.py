@@ -2049,10 +2049,6 @@ elif menu == "🔐 Administration":
                 anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
                 titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{anim_label}"
 
-                nb_key = f"adm_anim_nb_{at['id']}_{idx}"
-                if nb_key not in st.session_state:
-                    st.session_state[nb_key] = anim_ins['nb_enfants'] if anim_ins else 1
-
                 with st.expander(titre_label, expanded=False):
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                     st.markdown("**Gestion de l'animateur :**")
@@ -2064,7 +2060,9 @@ elif menu == "🔐 Administration":
                         idx_def = 0
                     nouvel_anim = st.selectbox("Animateur à assigner", options_anim, index=idx_def, key=f"adm_anim_select_{at['id']}_{idx}")
 
-                    nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=st.session_state[nb_key], key=nb_key)
+                    # Valeur par défaut : le nombre actuel d'enfants de l'animateur (ou 1)
+                    default_nb = anim_ins['nb_enfants'] if anim_ins else 1
+                    nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=default_nb, key=f"adm_anim_nb_{at['id']}_{idx}")
 
                     if st.button("✅ Appliquer", key=f"adm_anim_apply_{at['id']}_{idx}", type="primary"):
                         if nouvel_anim == "Choisir...":
@@ -2085,7 +2083,7 @@ elif menu == "🔐 Administration":
                                 nouvelle_occupation = total_occ + 1 + nb_enf
                                 nouveau_total_enfants = total_enfants_actuel + nb_enf
 
-                            # Calcul de la valeur maximale possible (pour information)
+                            # Calcul de la valeur maximale possible (information)
                             if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
                                 marge_enf = max_enf_at - (total_enfants_actuel - ancien_nb)
                                 marge_capa = at['capacite_max'] - (total_occ - (1 + ancien_nb))
@@ -2115,7 +2113,6 @@ elif menu == "🔐 Administration":
                                     supabase.table("inscriptions").insert({"adherent_id": nouvel_anim_id, "atelier_id": at['id'], "nb_enfants": nb_enf}).execute()
                                 enregistrer_log("Admin", "Modification animateur", f"Animateur {nouvel_anim} ({nb_enf} enfants) - {at_info_log}")
                                 st.success("Modification effectuée !")
-                                st.session_state[nb_key] = nb_enf
                                 st.rerun()
                                 
     if st.sidebar.button("🚪 Déconnexion administration"):
