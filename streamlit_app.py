@@ -1538,9 +1538,24 @@ elif menu == "🔐 Administration":
                 c_l = get_color(a['lieu_nom'])
                 anim_id_at = a.get('animateur_id')
                 ins_at = cache_ins_adm.get(a['id'], [])
-                t_ad, t_en = len(ins_at), sum([p['nb_enfants'] for p in ins_at])
+                t_ad = len(ins_at)
+                t_en = sum([p['nb_enfants'] for p in ins_at])
                 restantes = a['capacite_max'] - (t_ad + t_en)
-                cl_c = "alerte-complet" if restantes <= 0 else ""
+                
+                # --- Calcul des places enfants restantes ---
+                max_enf_at = get_max_enfants_atelier(a)
+                nb_enfants_inscrits = t_en  # total enfants déjà inscrits (inclut animateur)
+                places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
+                if places_enfants_restantes == 0:
+                    statut_enfants = "🚫 Enfants complet"
+                else:
+                    statut_enfants = f"👶 {places_enfants_restantes} pl. enfants"
+                
+                # Vérifier si la capacité totale est dépassée
+                capacite_depassee = restantes < 0
+                if capacite_depassee:
+                    statut_enfants += " ⚠️ Salle saturée"
+                
                 verrou_icon = " 🔒" if is_verrouille(a) else ""
                 at_info_log = f"{a['date_atelier']} | {a['horaire_lib']} | {a['lieu_nom']}"
                 anim_nom_plan = None
@@ -1549,7 +1564,10 @@ elif menu == "🔐 Administration":
                     if anim_adh_plan:
                         anim_nom_plan = f"{anim_adh_plan['prenom']} {anim_adh_plan['nom']}"
                 anim_label_plan = f" | ⭐ {anim_nom_plan}" if anim_nom_plan else ""
-                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
+                
+                # Affichage sans le compteur de places totales
+                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
+                
                 if ins_at:
                     anim_ins_plan = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
                     autres_plan = [p for p in ins_at if p['adherent_id'] != anim_id_at]
@@ -1608,7 +1626,7 @@ elif menu == "🔐 Administration":
                     st.markdown('<hr class="separateur-atelier">', unsafe_allow_html=True)
         else:
             st.info("Aucun atelier trouvé sur cette période.")
-
+            
     with t4:  # STATISTIQUES
         st.subheader("📈 Statistiques de participation")
         cs1, cs2 = st.columns(2)
