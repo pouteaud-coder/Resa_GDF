@@ -776,7 +776,7 @@ if est_animateur_connecte:
 menu = st.sidebar.radio("Navigation", menu_options)
 
 # ==========================================
-# SECTION 🎯 ANIMATEUR (sans liste des autres inscrits)
+# SECTION 🎯 ANIMATEUR (tous les animateurs peuvent modifier l'animateur et son nb d'enfants)
 # ==========================================
 if menu == "🎯 Animateur":
     st.header(f"🎯 Espace Animateur — {user_connecte}")
@@ -801,21 +801,19 @@ if menu == "🎯 Animateur":
     else:
         for at in ateliers:
             anim_id_at = at.get('animateur_id')
-            je_suis_animateur_ici = (anim_id_at == id_user_connecte)
-
             try:
                 res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
                 ins_data = res_ins.data if res_ins.data else []
             except:
                 ins_data = []
 
-            # Calculs pour les places
+            # Calculs des places
             total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
             restantes = at['capacite_max'] - total_occ
             max_enf_at = get_max_enfants_atelier(at)
             total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])
 
-            # Trouver l'inscription de l'animateur (s'il est désigné)
+            # Récupérer l'inscription de l'animateur actuel (s'il existe)
             anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
             anim_nom_at = None
             if anim_ins:
@@ -829,39 +827,68 @@ if menu == "🎯 Animateur":
             anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
             titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}{anim_label}"
 
-            with st.expander(titre_label, expanded=je_suis_animateur_ici):
+            with st.expander(titre_label, expanded=False):
                 at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
 
-                st.markdown("**Animateur de cet atelier :**")
-                if anim_id_at == id_user_connecte:
-                    # L'utilisateur connecté est l'animateur désigné
-                    st.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ Vous êtes l\'animateur de cet atelier</span>', unsafe_allow_html=True)
-                    # Modification du nombre d'enfants
-                    nb_anim_cur = anim_ins['nb_enfants'] if anim_ins else 1
-                    col1, col2 = st.columns([3, 1])
-                    new_nb_anim = col1.number_input("Nombre d'enfants que vous amenez", min_value=0, max_value=10, value=int(nb_anim_cur), key=f"anim_nb_{at['id']}")
-                    if col2.button("✏️ Modifier", key=f"anim_mod_nb_{at['id']}"):
-                        # Vérifier les limites
-                        delta = new_nb_anim - nb_anim_cur
-                        nouveau_total_enfants = total_enfants_actuel + delta
-                        nouveau_total_occupation = total_occ + delta  # l'animateur reste un adulte
+                st.markdown("**Gestion de l'animateur :**")
+                
+                # Sélection de l'animateur (tous les animateurs disponibles)
+                options_anim = ["Choisir..."] + liste_adh_anim
+                # Indice par défaut : si un animateur est déjà désigné, le sélectionner
+                if anim_nom_at and anim_nom_at in liste_adh_anim:
+                    idx_def = liste_adh_anim.index(anim_nom_at) + 1
+                else:
+                    idx_def = 0
+                nouvel_anim = st.selectbox("Animateur à assigner", options_anim, index=idx_def, key=f"anim_select_{at['id']}")
+                
+                # Nombre d'enfants de l'animateur (valeur actuelle ou 1 par défaut)
+                nb_enf_actuel = anim_ins['nb_enfants'] if anim_ins else 1
+                nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=int(nb_enf_actuel), key=f"anim_nb_enf_{at['id']}")
+                
+                if st.button("✅ Appliquer", key=f"anim_apply_{at['id']}", type="primary"):
+                    if nouvel_anim == "Choisir...":
+                        st.warning("Veuillez sélectionner un animateur.")
+                    else:
+                        nouvel_anim_id = dict_adh_anim[nouvel_anim]
+                        ancien_anim_id = anim_id_at
+                        
+                        # Calculer l'impact sur les places
+                        if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
+                            # On remplace l'ancien animateur par le nouveau
+                            ancien_nb = anim_ins['nb_enfants'] if anim_ins else 1
+                            nouvelle_occupation = total_occ - (1 + ancien_nb) + (1 + nb_enf)
+                            nouveau_total_enfants = total_enfants_actuel - ancien_nb + nb_enf
+                        elif ancien_anim_id == nouvel_anim_id:
+                            # Même animateur, on modifie juste son nb_enfants
+                            delta = nb_enf - nb_enf_actuel
+                            nouvelle_occupation = total_occ + delta
+                            nouveau_total_enfants = total_enfants_actuel + delta
+                        else:
+                            # Aucun animateur actuel, on ajoute le nouveau
+                            nouvelle_occupation = total_occ + 1 + nb_enf
+                            nouveau_total_enfants = total_enfants_actuel + nb_enf
+                        
+                        # Vérifications
                         if nouveau_total_enfants > max_enf_at:
                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
-                        elif nouveau_total_occupation > at['capacite_max']:
+                        elif nouvelle_occupation > at['capacite_max']:
                             st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
                         else:
-                            supabase.table("inscriptions").update({"nb_enfants": new_nb_anim}).eq("id", anim_ins['id']).execute()
-                            enregistrer_log(user_connecte, "Modification nombre d'enfants", f"{user_connecte} → {new_nb_anim} enfants - {at_info_log}")
+                            # Appliquer les modifications
+                            if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
+                                # Retirer l'ancien animateur
+                                supabase.table("inscriptions").delete().eq("atelier_id", at['id']).eq("adherent_id", ancien_anim_id).execute()
+                            # Mettre à jour l'atelier avec le nouvel animateur
+                            supabase.table("ateliers").update({"animateur_id": nouvel_anim_id}).eq("id", at['id']).execute()
+                            # Ajouter ou mettre à jour l'inscription du nouvel animateur
+                            existing_new = supabase.table("inscriptions").select("id").eq("atelier_id", at['id']).eq("adherent_id", nouvel_anim_id).execute()
+                            if existing_new.data:
+                                supabase.table("inscriptions").update({"nb_enfants": nb_enf}).eq("id", existing_new.data[0]['id']).execute()
+                            else:
+                                supabase.table("inscriptions").insert({"adherent_id": nouvel_anim_id, "atelier_id": at['id'], "nb_enfants": nb_enf}).execute()
+                            enregistrer_log(user_connecte, "Modification animateur", f"Animateur {nouvel_anim} ({nb_enf} enfants) - {at_info_log}")
+                            st.success("Modification effectuée !")
                             st.rerun()
-                elif anim_id_at is None:
-                    # Aucun animateur désigné : possibilité de se désigner
-                    col_an1, col_an2 = st.columns([3, 1])
-                    col_an1.write("_Aucun animateur désigné pour cet atelier_")
-                    if col_an2.button("🎯 Me désigner", key=f"anim_set_{at['id']}"):
-                        dialog_attribuer_animateur(at['id'], at['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur=user_connecte)
-                else:
-                    # Un autre animateur est désigné
-                    st.info(f"Cet atelier a déjà un animateur : **{anim_nom_at}**. Vous ne pouvez pas modifier cette inscription.")
 
 # ==========================================
 # SECTION 📝 INSCRIPTIONS (message erreur capacité en rouge gras)
