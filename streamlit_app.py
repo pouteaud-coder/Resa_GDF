@@ -1137,10 +1137,25 @@ elif menu == "📊 Suivi & Récap":
                 c_l = get_color(a['lieu_nom'])
                 anim_id_at = a.get('animateur_id')
                 ins_at = cache_ins.get(a['id'], [])
-                t_ad, t_en = len(ins_at), sum([p['nb_enfants'] for p in ins_at])
+                t_ad = len(ins_at)
+                t_en = sum([p['nb_enfants'] for p in ins_at])
                 restantes = a['capacite_max'] - (t_ad + t_en)
-                cl_c = "alerte-complet" if restantes <= 0 else ""
-                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge {cl_c}'>🏁 {restantes} pl.</span>", unsafe_allow_html=True)
+                
+                # --- Calcul des places enfants restantes ---
+                max_enf_at = get_max_enfants_atelier(a)
+                nb_enfants_inscrits = t_en
+                places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
+                if places_enfants_restantes == 0:
+                    statut_enfants = "🚫 Enfants complet"
+                else:
+                    statut_enfants = f"👶 {places_enfants_restantes} pl. enfants"
+                
+                # Optionnel : si la capacité totale est dépassée, ajouter un avertissement
+                if restantes < 0:
+                    statut_enfants += " ⚠️ Salle saturée"
+                
+                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
+                
                 if ins_at:
                     anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
                     autres = [p for p in ins_at if p['adherent_id'] != anim_id_at]
