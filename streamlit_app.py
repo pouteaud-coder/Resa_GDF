@@ -1328,11 +1328,25 @@ elif menu == "🔐 Administration":
                 ateliers_bruts = []
             lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
             horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+            
+            # Préparer la liste des ateliers avec calcul des places enfants restantes
             rep = []
             for a in ateliers_bruts:
                 a['lieu_nom'] = lieux_dict.get(a['lieu_id'], '?')
                 a['horaire_lib'] = horaires_dict.get(a['horaire_id'], '?')
+                # Récupérer les inscriptions pour calculer les places enfants
+                try:
+                    ins = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", a['id']).execute()
+                    inscriptions = ins.data if ins.data else []
+                except:
+                    inscriptions = []
+                nb_enfants_inscrits = sum([i['nb_enfants'] for i in inscriptions])
+                max_enf_at = get_max_enfants_atelier(a)
+                places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
+                a['places_enfants_restantes'] = places_enfants_restantes
+                a['nb_enfants_inscrits'] = nb_enfants_inscrits
                 rep.append(a)
+            
             if not rep:
                 st.info("Aucun atelier trouvé sur cette période.")
             else:
@@ -1347,10 +1361,21 @@ elif menu == "🔐 Administration":
                         if anim_adh:
                             anim_nom_rep = f"{anim_adh['prenom']} {anim_adh['nom']}"
                     anim_label_rep = f" | ⭐ {anim_nom_rep}" if anim_nom_rep else ""
-                    max_enf_rep = a.get('max_enfants')
-                    label_max_enf = f" | 👶 max {max_enf_rep} enf." if max_enf_rep else f" | 👶 max {MAX_ENFANTS} enf. (global)"
+                    
+                    # Affichage des places enfants restantes
+                    if a['places_enfants_restantes'] == 0:
+                        statut_enfants = "🚫 Enfants complet"
+                    else:
+                        statut_enfants = f"👶 {a['places_enfants_restantes']} pl. enfants"
+                    
+                    # Optionnel : vérifier si la capacité totale est dépassée (pour affichage)
+                    total_occ = sum([1 + i['nb_enfants'] for i in inscriptions]) if 'inscriptions' in locals() else 0
+                    capacite_depassee = total_occ > a['capacite_max']
+                    if capacite_depassee:
+                        statut_enfants += " ⚠️ Salle saturée"
+                    
                     ca, cb, cc, cd, ce, cf_anim = st.columns([0.38, 0.1, 0.1, 0.1, 0.1, 0.22])
-                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}{anim_label_rep}{label_max_enf}")
+                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}{anim_label_rep} | {statut_enfants}")
                     btn_l = "🔴 Désactiver" if a['est_actif'] else "🟢 Activer"
                     if cb.button(btn_l, key=f"at_stat_{a['id']}"):
                         supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute()
@@ -1380,7 +1405,7 @@ elif menu == "🔐 Administration":
                     else:
                         if cf_anim.button("⭐ Assigner anim.", key=f"at_anim_set_{a['id']}"):
                             dialog_attribuer_animateur(a['id'], a['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur="Admin")
-
+                                
         elif sub == "Actions groupées":
             with st.form("bulk_form"):
                 c1, c2 = st.columns(2)
