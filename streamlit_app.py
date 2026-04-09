@@ -892,7 +892,7 @@ if menu == "🎯 Animateur":
                             confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, user_connecte)
 
 # ==========================================
-# SECTION 📝 INSCRIPTIONS (MODIFIÉE : affichage places enfants restantes)
+# SECTION 📝 INSCRIPTIONS (avec modifications et désinscriptions)
 # ==========================================
 elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
@@ -921,6 +921,7 @@ elif menu == "📝 Inscriptions":
                 at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
                 at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
                 ateliers.append(at)
+
             if not ateliers:
                 st.info("ℹ️ Aucun atelier à venir. Consultez l'Administration → 🏗️ Ateliers pour en créer.")
             else:
@@ -934,19 +935,18 @@ elif menu == "📝 Inscriptions":
                     anim_id_at = at.get('animateur_id')
                     max_enf_at = get_max_enfants_atelier(at)
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
-                    
-                    # Nombre total d'enfants inscrits (y compris ceux de l'animateur)
-                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])
+                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])  # total enfants (inclut animateur)
                     places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
-                    atelier_enfants_complet = nb_enfants_inscrits >= max_enf_at
-                    
-                    # Si plus de places enfants, l'atelier est complet
+                    atelier_enfants_complet = (nb_enfants_inscrits >= max_enf_at)
+
+                    # Déterminer l'affichage du statut
                     if places_enfants_restantes == 0:
                         statut_p = "🚨 COMPLET"
+                        restantes = 0
                     else:
                         restantes = at['capacite_max'] - total_occ
                         statut_p = f"✅ {restantes} pl. libres"
-                    
+
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                     titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p} | 👶 {places_enfants_restantes} pl. enfants"
 
@@ -955,10 +955,12 @@ elif menu == "📝 Inscriptions":
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
 
                         if ins_data:
+                            # Séparer l'animateur des autres
                             anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
                             autres_ins = [i for i in ins_data if i['adherent_id'] != anim_id_at]
                             autres_tries = sorted(autres_ins, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
 
+                            # Affichage de l'animateur (non modifiable)
                             if anim_ins:
                                 n_a = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
                                 if is_verrouille(at):
@@ -968,30 +970,53 @@ elif menu == "📝 Inscriptions":
                                     c_a1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
                                     c_a2.write("🔒")
 
-                            for i in autres_tries:
-                                n_f = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
+                            # Affichage des autres inscriptions avec boutons Modifier et Désinscrire
+                            for p in autres_tries:
+                                n_f = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
                                 if is_verrouille(at):
-                                    st.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
+                                    st.write(f"• {n_f} **({p['nb_enfants']} enf.)**")
                                 else:
-                                    c_nom, c_poub = st.columns([0.88, 0.12])
-                                    c_nom.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
-                                    if c_poub.button("🗑️", key=f"del_{i['id']}"):
-                                        confirm_unsubscribe_dialog(i['id'], n_f, at_info_log, user_principal)
+                                    col_nom, col_modif, col_poub = st.columns([0.7, 0.15, 0.15])
+                                    col_nom.write(f"• {n_f} **({p['nb_enfants']} enf.)**")
+                                    
+                                    # Bouton Modifier
+                                    if col_modif.button("✏️", key=f"mod_{p['id']}"):
+                                        # Dialogue de modification du nombre d'enfants
+                                        with st.popover(f"Modifier {n_f}"):
+                                            new_nb = st.number_input("Nombre d'enfants", min_value=1, max_value=10, value=p['nb_enfants'], key=f"new_nb_{p['id']}")
+                                            if st.button("Enregistrer", key=f"save_{p['id']}"):
+                                                # Vérifier les limites
+                                                delta = new_nb - p['nb_enfants']
+                                                if nb_enfants_inscrits + delta > max_enf_at:
+                                                    st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
+                                                elif restantes - delta < 0:
+                                                    st.error("Manque de places totales.")
+                                                else:
+                                                    supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
+                                                    enregistrer_log(user_principal, "Modification", f"{n_f} → {new_nb} enfants - {at_info_log}")
+                                                    st.rerun()
+                                    
+                                    # Bouton Désinscrire
+                                    if col_poub.button("🗑️", key=f"del_{p['id']}"):
+                                        confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, user_principal)
 
+                        # Formulaire d'inscription pour une nouvelle AM
                         if not is_verrouille(at):
                             st.markdown("---")
-                            try: idx_def = (liste_adh.index(user_principal) + 1)
-                            except: idx_def = 0
-                            c1, c2, c3 = st.columns([2, 1, 1])
-                            qui = c1.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
-                            nb_e = c2.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
+                            try:
+                                idx_def = (liste_adh.index(user_principal) + 1)
+                            except:
+                                idx_def = 0
+                            col_qui, col_nb, col_btn = st.columns([2, 1, 1])
+                            qui = col_qui.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
+                            nb_e = col_nb.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
 
                             qui_est_anim = (qui != "Choisir..." and dict_adh.get(qui) == anim_id_at)
                             if qui_est_anim:
                                 st.warning("🔒 Cette personne est l'animateur de cet atelier. Son inscription est gérée automatiquement.")
                             elif atelier_enfants_complet and qui != "Choisir...":
                                 st.warning(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) est atteint pour cet atelier.")
-                            elif c3.button("Valider", key=f"v_{at['id']}", type="primary"):
+                            elif col_btn.button("Valider", key=f"v_{at['id']}", type="primary"):
                                 if qui != "Choisir...":
                                     id_adh = dict_adh[qui]
                                     existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
@@ -1000,7 +1025,7 @@ elif menu == "📝 Inscriptions":
                                         if nb_enfants_inscrits + delta_enf > max_enf_at:
                                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
                                         elif restantes - delta_enf < 0:
-                                            st.error("Manque de places")
+                                            st.error("Manque de places totales.")
                                         else:
                                             supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
                                             enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
@@ -1009,12 +1034,11 @@ elif menu == "📝 Inscriptions":
                                         if nb_enfants_inscrits + nb_e > max_enf_at:
                                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
                                         elif restantes - (1 + nb_e) < 0:
-                                            st.error("Manque de places")
+                                            st.error("Manque de places totales.")
                                         else:
                                             supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
                                             enregistrer_log(user_principal, "Inscription", f"{qui} s'inscrit (+{nb_e} enf.) - {at_info_log}")
                                             st.rerun()
-
 # ==========================================
 # SECTION 📊 SUIVI & RÉCAP (inchangée)
 # ==========================================
