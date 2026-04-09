@@ -934,14 +934,19 @@ elif menu == "📝 Inscriptions":
                     anim_id_at = at.get('animateur_id')
                     max_enf_at = get_max_enfants_atelier(at)
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
-                    restantes = at['capacite_max'] - total_occ
-
+                    
                     # Nombre total d'enfants inscrits (y compris ceux de l'animateur)
                     nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])
                     places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                     atelier_enfants_complet = nb_enfants_inscrits >= max_enf_at
-
-                    statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
+                    
+                    # Si plus de places enfants, l'atelier est complet
+                    if places_enfants_restantes == 0:
+                        statut_p = "🚨 COMPLET"
+                    else:
+                        restantes = at['capacite_max'] - total_occ
+                        statut_p = f"✅ {restantes} pl. libres"
+                    
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                     titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p} | 👶 {places_enfants_restantes} pl. enfants"
 
