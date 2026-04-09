@@ -1580,15 +1580,18 @@ elif menu == "🔐 Administration":
                 count = sum(1 for x in filtered_ins if x['adherent_id'] == am_id)
                 stats_list.append({"Assistante Maternelle": am_nom, "Nombre d'ateliers": count})
             df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False).reset_index(drop=True)
-            st.dataframe(
-                df_stats,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Assistante Maternelle": st.column_config.TextColumn("Assistante Maternelle"),
-                    "Nombre d'ateliers": st.column_config.NumberColumn("Nombre d'ateliers"),
-                }
-            )
+    
+            # --- STYLE PERSONNALISÉ ---
+            styled_df = df_stats.style.set_properties(**{'background-color': 'white', 'color': 'black'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#f0f0f0'), ('color', 'black'), ('font-weight', 'bold')]},
+                {'selector': 'td:nth-child(2)', 'props': [('text-align', 'center')]},
+                {'selector': 'th:nth-child(2)', 'props': [('text-align', 'center')]},
+                {'selector': 'table', 'props': [('width', '100%'), ('border-collapse', 'collapse')]},
+                {'selector': 'td, th', 'props': [('padding', '8px'), ('border', '1px solid #ddd')]}
+            ]).hide(axis='index')
+            html_table = styled_df.to_html()
+            st.markdown(html_table, unsafe_allow_html=True)
+    
             total_inscr = df_stats["Nombre d'ateliers"].sum()
             st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
             st.markdown(f"**Nombre d'ateliers proposés sur la période :** {nb_at_proposes}")
@@ -1631,7 +1634,7 @@ elif menu == "🔐 Administration":
                 for at in ateliers:
                     date_fr = format_date_fr_simple(at['date_atelier'])
                     st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu_nom']} - {at['horaire_lib']})")
-
+                
     with t5:  # 👥 LISTE AM
         st.subheader("👥 Gestion des Assistantes Maternelles")
         with st.form("add_am"):
