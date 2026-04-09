@@ -776,7 +776,7 @@ if est_animateur_connecte:
 menu = st.sidebar.radio("Navigation", menu_options)
 
 # ==========================================
-# SECTION 🎯 ANIMATEUR (sans erreur de session state)
+# SECTION 🎯 ANIMATEUR (sans conflit de session state)
 # ==========================================
 if menu == "🎯 Animateur":
     st.header(f"🎯 Espace Animateur — {user_connecte}")
@@ -829,16 +829,10 @@ if menu == "🎯 Animateur":
             anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
             titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{anim_label}"
 
-            # Clé pour le nombre d'enfants dans session_state
-            nb_key = f"anim_nb_{at['id']}_{idx}"
-            if nb_key not in st.session_state:
-                st.session_state[nb_key] = anim_ins['nb_enfants'] if anim_ins else 1
-
             with st.expander(titre_label, expanded=False):
                 at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                 st.markdown("**Gestion de l'animateur :**")
 
-                # Sélection de l'animateur (tous les animateurs disponibles)
                 options_anim = ["Choisir..."] + liste_adh_anim
                 if anim_nom_at and anim_nom_at in liste_adh_anim:
                     idx_def = liste_adh_anim.index(anim_nom_at) + 1
@@ -846,8 +840,9 @@ if menu == "🎯 Animateur":
                     idx_def = 0
                 nouvel_anim = st.selectbox("Animateur à assigner", options_anim, index=idx_def, key=f"anim_select_{at['id']}_{idx}")
 
-                # Nombre d'enfants avec session state
-                nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=st.session_state[nb_key], key=nb_key)
+                # Valeur par défaut : nombre d'enfants actuel de l'animateur (ou 1)
+                def_nb = anim_ins['nb_enfants'] if anim_ins else 1
+                nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=def_nb, key=f"anim_nb_{at['id']}_{idx}")
 
                 if st.button("✅ Appliquer", key=f"anim_apply_{at['id']}_{idx}", type="primary"):
                     if nouvel_anim == "Choisir...":
@@ -857,7 +852,6 @@ if menu == "🎯 Animateur":
                         ancien_anim_id = anim_id_at
                         ancien_nb = anim_ins['nb_enfants'] if anim_ins else 1
 
-                        # Calcul des nouveaux totaux
                         if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
                             nouvelle_occupation = total_occ - (1 + ancien_nb) + (1 + nb_enf)
                             nouveau_total_enfants = total_enfants_actuel - ancien_nb + nb_enf
@@ -869,7 +863,7 @@ if menu == "🎯 Animateur":
                             nouvelle_occupation = total_occ + 1 + nb_enf
                             nouveau_total_enfants = total_enfants_actuel + nb_enf
 
-                        # Calcul de la valeur maximale autorisée (pour information)
+                        # Calcul de la valeur maximale possible (pour information)
                         if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
                             marge_enf = max_enf_at - (total_enfants_actuel - ancien_nb)
                             marge_capa = at['capacite_max'] - (total_occ - (1 + ancien_nb))
@@ -884,13 +878,11 @@ if menu == "🎯 Animateur":
                         if max_autorise < 0:
                             max_autorise = 0
 
-                        # Vérifications
                         if nouveau_total_enfants > max_enf_at:
                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé. Valeur maximale possible : {max_autorise}")
                         elif nouvelle_occupation > at['capacite_max']:
                             st.markdown(f"<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée. Valeur maximale possible : {max_autorise}</span>", unsafe_allow_html=True)
                         else:
-                            # Appliquer les modifications
                             if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
                                 supabase.table("inscriptions").delete().eq("atelier_id", at['id']).eq("adherent_id", ancien_anim_id).execute()
                             supabase.table("ateliers").update({"animateur_id": nouvel_anim_id}).eq("id", at['id']).execute()
@@ -901,9 +893,8 @@ if menu == "🎯 Animateur":
                                 supabase.table("inscriptions").insert({"adherent_id": nouvel_anim_id, "atelier_id": at['id'], "nb_enfants": nb_enf}).execute()
                             enregistrer_log(user_connecte, "Modification animateur", f"Animateur {nouvel_anim} ({nb_enf} enfants) - {at_info_log}")
                             st.success("Modification effectuée !")
-                            # Mettre à jour la session state
-                            st.session_state[nb_key] = nb_enf
                             st.rerun()
+                            
 # ==========================================
 # SECTION 📝 INSCRIPTIONS (message erreur capacité en rouge gras)
 # ==========================================
