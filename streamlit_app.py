@@ -776,7 +776,7 @@ if est_animateur_connecte:
 menu = st.sidebar.radio("Navigation", menu_options)
 
 # ==========================================
-# SECTION 🎯 ANIMATEUR (MODIFIÉE : LIMITE ENFANTS)
+# SECTION 🎯 ANIMATEUR (sans liste des autres inscrits)
 # ==========================================
 if menu == "🎯 Animateur":
     st.header(f"🎯 Espace Animateur — {user_connecte}")
@@ -809,22 +809,21 @@ if menu == "🎯 Animateur":
             except:
                 ins_data = []
 
+            # Calculs pour les places
             total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
             restantes = at['capacite_max'] - total_occ
-
-            # --- Calcul de la limite enfants pour cet atelier ---
             max_enf_at = get_max_enfants_atelier(at)
-            total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])  # inclut animateur
+            total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])
 
+            # Trouver l'inscription de l'animateur (s'il est désigné)
+            anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
             anim_nom_at = None
-            if anim_id_at:
-                anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
-                if anim_ins:
-                    anim_nom_at = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
-                else:
-                    anim_adh = next((a for a in adh_data if a['id'] == anim_id_at), None)
-                    if anim_adh:
-                        anim_nom_at = f"{anim_adh['prenom']} {anim_adh['nom']}"
+            if anim_ins:
+                anim_nom_at = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
+            elif anim_id_at:
+                anim_adh = next((a for a in adh_data if a['id'] == anim_id_at), None)
+                if anim_adh:
+                    anim_nom_at = f"{anim_adh['prenom']} {anim_adh['nom']}"
 
             statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
             anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
@@ -834,67 +833,35 @@ if menu == "🎯 Animateur":
                 at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
 
                 st.markdown("**Animateur de cet atelier :**")
-                if anim_id_at and anim_nom_at:
-                    col_anim1, col_anim2, col_anim3 = st.columns([2, 1, 1])
-                    col_anim1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {anim_nom_at}</span>', unsafe_allow_html=True)
-                    anim_ins_cur = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None)
-                    nb_anim_cur = anim_ins_cur['nb_enfants'] if anim_ins_cur else 1
-                    new_nb_anim = col_anim2.number_input("Enf.", 0, 10, int(nb_anim_cur), key=f"anim_nb_{at['id']}", label_visibility="collapsed")
-                    if col_anim2.button("✏️", key=f"anim_mod_nb_{at['id']}"):
-                        # Vérification limite enfants
-                        nouveau_total = total_enfants_actuel - nb_anim_cur + new_nb_anim
-                        if nouveau_total > max_enf_at:
+                if anim_id_at == id_user_connecte:
+                    # L'utilisateur connecté est l'animateur désigné
+                    st.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ Vous êtes l\'animateur de cet atelier</span>', unsafe_allow_html=True)
+                    # Modification du nombre d'enfants
+                    nb_anim_cur = anim_ins['nb_enfants'] if anim_ins else 1
+                    col1, col2 = st.columns([3, 1])
+                    new_nb_anim = col1.number_input("Nombre d'enfants que vous amenez", min_value=0, max_value=10, value=int(nb_anim_cur), key=f"anim_nb_{at['id']}")
+                    if col2.button("✏️ Modifier", key=f"anim_mod_nb_{at['id']}"):
+                        # Vérifier les limites
+                        delta = new_nb_anim - nb_anim_cur
+                        nouveau_total_enfants = total_enfants_actuel + delta
+                        nouveau_total_occupation = total_occ + delta  # l'animateur reste un adulte
+                        if nouveau_total_enfants > max_enf_at:
                             st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
+                        elif nouveau_total_occupation > at['capacite_max']:
+                            st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
                         else:
-                            supabase.table("inscriptions").update({"nb_enfants": new_nb_anim}).eq("id", anim_ins_cur['id']).execute()
-                            enregistrer_log(user_connecte, "Modif nb enfants animateur", f"{anim_nom_at} → {new_nb_anim} enf. - {at_info_log}")
+                            supabase.table("inscriptions").update({"nb_enfants": new_nb_anim}).eq("id", anim_ins['id']).execute()
+                            enregistrer_log(user_connecte, "Modification nombre d'enfants", f"{user_connecte} → {new_nb_anim} enfants - {at_info_log}")
                             st.rerun()
-                    if col_anim3.button("🔄 Changer", key=f"anim_chg_{at['id']}"):
-                        dialog_attribuer_animateur(at['id'], at['titre'], anim_id_at, anim_nom_at, liste_adh_anim, dict_adh_anim, auteur=user_connecte)
-                else:
+                elif anim_id_at is None:
+                    # Aucun animateur désigné : possibilité de se désigner
                     col_an1, col_an2 = st.columns([3, 1])
-                    col_an1.write("_Aucun animateur désigné_")
-                    if col_an2.button("🎯 Me désigner / Désigner", key=f"anim_set_{at['id']}"):
+                    col_an1.write("_Aucun animateur désigné pour cet atelier_")
+                    if col_an2.button("🎯 Me désigner", key=f"anim_set_{at['id']}"):
                         dialog_attribuer_animateur(at['id'], at['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur=user_connecte)
-
-                st.markdown("---")
-
-                if ins_data:
-                    st.markdown("**Inscrits :**")
-                    anim_ligne = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
-                    autres_lignes = [i for i in ins_data if i['adherent_id'] != anim_id_at]
-                    autres_tries = sorted(autres_lignes, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
-
-                    if anim_ligne:
-                        n_a = f"{anim_ligne['adherents']['prenom']} {anim_ligne['adherents']['nom']}"
-                        ca1, ca2, ca3, ca4 = st.columns([0.45, 0.18, 0.18, 0.19])
-                        ca1.markdown(f'<span style="color:#e65100; font-weight:bold;">⭐ {n_a} <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
-                        new_nb_a = ca2.number_input("Enf.", 0, 10, int(anim_ligne['nb_enfants']), key=f"anim_enf_list_{anim_ligne['id']}", label_visibility="collapsed")
-                        if ca3.button("✏️ Modifier", key=f"anim_mod_list_{anim_ligne['id']}"):
-                            nouveau_total = total_enfants_actuel - anim_ligne['nb_enfants'] + new_nb_a
-                            if nouveau_total > max_enf_at:
-                                st.error(f"🚫 Limite d'enfants ({max_enf_at}) dépassée.")
-                            else:
-                                supabase.table("inscriptions").update({"nb_enfants": new_nb_a}).eq("id", anim_ligne['id']).execute()
-                                enregistrer_log(user_connecte, "Modification (animateur)", f"{n_a} → {new_nb_a} enfants - {at_info_log}")
-                                st.rerun()
-                        ca4.write("🔒 _Animateur_")
-
-                    for p in autres_tries:
-                        n_f = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
-                        cp1, cp2, cp3, cp4 = st.columns([0.45, 0.18, 0.18, 0.19])
-                        cp1.write(f"• {n_f}")
-                        new_nb = cp2.number_input("Enf.", 0, 10, int(p['nb_enfants']), key=f"anim_nb_p_{p['id']}", label_visibility="collapsed")
-                        if cp3.button("✏️ Modifier", key=f"anim_mod_p_{p['id']}"):
-                            nouveau_total = total_enfants_actuel - p['nb_enfants'] + new_nb
-                            if nouveau_total > max_enf_at:
-                                st.error(f"🚫 Limite d'enfants ({max_enf_at}) dépassée.")
-                            else:
-                                supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
-                                enregistrer_log(user_connecte, "Modification (animateur)", f"{n_f} → {new_nb} enfants - {at_info_log}")
-                                st.rerun()
-                        if cp4.button("🗑️", key=f"anim_del_p_{p['id']}"):
-                            confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, user_connecte)
+                else:
+                    # Un autre animateur est désigné
+                    st.info(f"Cet atelier a déjà un animateur : **{anim_nom_at}**. Vous ne pouvez pas modifier cette inscription.")
 
 # ==========================================
 # SECTION 📝 INSCRIPTIONS (message erreur capacité en rouge gras)
