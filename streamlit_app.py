@@ -99,7 +99,15 @@ st.markdown("""
         border: 1.5px solid #80cbc4 !important;
         color: #1b5e20 !important;
     }
-           
+    /* Correction affichage jours dans générateur ateliers */
+    .stMultiSelect [data-baseweb="select"] {
+        min-width: 140px;
+    }
+    .stMultiSelect [data-baseweb="select"] div[data-testid="stMarkdownContainer"] p {
+        padding-left: 6px;
+        white-space: nowrap;
+        overflow: visible !important;
+    }           
     
     div[data-testid="column"] .stButton button[kind="primary"] {
         background-color: #a8e6cf !important;
