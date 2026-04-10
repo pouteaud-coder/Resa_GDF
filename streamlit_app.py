@@ -54,7 +54,7 @@ supabase: Client = create_client(url, key)
 # --- STYLE CSS ---
 st.markdown("""
     <style>
-    """html, body, [class*="st-"] { font-size: 1.05rem !important; background-color: #e6f4ff !important; color: #1b5e20 !important; }
+    html, body, [class*="st-"] { font-size: 1.05rem !important; background-color: #e6f4ff !important; color: #1b5e20 !important; }
     .stApp { background-color: #e6f4ff; }
     .lieu-badge { padding: 3px 10px; border-radius: 6px; color: white; font-weight: bold; font-size: 0.85rem; display: inline-block; margin: 2px 0; }
     .horaire-text { font-size: 0.9rem; color: #2e7d32; font-weight: 400; }
@@ -228,7 +228,7 @@ st.markdown("""
         background-color: #ffffff !important;
         color: #000000 !important;
         border: 1px solid #cccccc !important;
-    }"""
+    }
     </style>
     """, unsafe_allow_html=True)
 
