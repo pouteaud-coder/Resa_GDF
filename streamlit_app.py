@@ -1458,18 +1458,15 @@ elif menu == "🔐 Administration":
                         pd.DataFrame(st.session_state['at_list_gen']),
                         num_rows="dynamic",
                         column_config={
-                            "Date": st.column_config.TextColumn("Date", width="large"),
                             "Lieu": st.column_config.SelectboxColumn(options=l_list, required=False),
                             "Horaire": st.column_config.SelectboxColumn(options=h_list, required=False),
-                            "Max Enfants": st.column_config.NumberColumn(
-                                min_value=0, max_value=200,
-                                help=f"0 = utiliser la valeur globale ({MAX_ENFANTS})"
-                            ),
                             "Actif": st.column_config.CheckboxColumn(default=False),
                             "Verrouillé": st.column_config.CheckboxColumn(default=False)
+                            # "Date" et "Max Enfants" ne sont pas configurées → style par défaut
                         },
                         use_container_width=True,
                         key="editor_ateliers"
+                    )
                     )
                     if st.button("💾 Enregistrer"):
                         to_db = []
