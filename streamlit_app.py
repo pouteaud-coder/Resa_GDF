@@ -1293,7 +1293,27 @@ elif menu == "🔐 Administration":
                 c1, c2 = st.columns(2)
                 d1 = c1.date_input("Début", date.today(), format="DD/MM/YYYY", key="gen_d1")
                 d2 = c2.date_input("Fin", date.today() + timedelta(days=7), format="DD/MM/YYYY", key="gen_d2")
-                jours = st.multiselect("Jours", ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"], default=["Lundi", "Jeudi"])
+                # Gestion des jours sélectionnés avec des boutons à bascule
+                if "jours_selected" not in st.session_state:
+                    st.session_state.jours_selected = ["Lundi", "Jeudi"]
+                
+                st.markdown("**Jours de la semaine**")
+                cols_jours = st.columns(5)
+                jours_options = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
+                for idx, jour in enumerate(jours_options):
+                    with cols_jours[idx]:
+                        if st.button(
+                            jour,
+                            key=f"jour_{jour}",
+                            type="primary" if jour in st.session_state.jours_selected else "secondary",
+                            use_container_width=True
+                        ):
+                            if jour in st.session_state.jours_selected:
+                                st.session_state.jours_selected.remove(jour)
+                            else:
+                                st.session_state.jours_selected.append(jour)
+                            st.rerun()
+                jours = st.session_state.jours_selected
                 if st.button("📊 Générer les lignes"):
                     tmp, curr = [], d1
                     while curr <= d2:
