@@ -187,6 +187,16 @@ st.markdown("""
         box-shadow: none !important;
         border: 1px solid #1b5e20 !important;
     }
+    /* Désactiver les styles de validation Streamlit */
+    .stException,
+    .stAlert div[data-baseweb="notification"] {
+        display: none !important;
+    }
+    /* Ou plus spécifiquement pour les cases à cocher */
+    [data-testid="stCheckbox"] [data-testid="stAlert"] {
+        display: none !important;
+    }
+        
     </style>
     """, unsafe_allow_html=True)
 
