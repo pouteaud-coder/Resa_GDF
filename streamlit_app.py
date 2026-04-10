@@ -155,43 +155,7 @@ st.markdown("""
     }
     .stMultiSelect [data-baseweb="select"] {
         min-width: 160px !important;
-    }
-    /* Forcer l'affichage permanent des cases à cocher Streamlit */
-    div[data-testid="stCheckbox"] {
-        display: inline-flex !important;
-        align-items: center !important;
-        visibility: visible !important;
-    }
-    div[data-testid="stCheckbox"] input {
-        opacity: 1 !important;
-        visibility: visible !important;
-        margin-right: 8px !important;
-        accent-color: #1b5e20 !important;
-        width: 16px !important;
-        height: 16px !important;
-        background-color: white !important;
-    }
-    div[data-testid="stCheckbox"] label {
-        display: inline !important;
-        color: #1b5e20 !important;
-        visibility: visible !important;
-    }
-    /* SUPPRESSION TOTALE DES BORDURES ROUGES SUR LES CASES À COCHER */
-    div[data-testid="stCheckbox"] input,
-    div[data-testid="stCheckbox"] input:focus,
-    div[data-testid="stCheckbox"] input:active,
-    div[data-testid="stCheckbox"] input:invalid,
-    div[data-testid="stCheckbox"] input:user-invalid {
-        outline: none !important;
-        box-shadow: none !important;
-        border: 1px solid #ccc !important;
-    }
-    
-    /* Désactiver les styles de validation Streamlit (bordures rouges) sur tous les champs */
-    input:invalid, textarea:invalid, select:invalid {
-        box-shadow: none !important;
-        border-color: #ccc !important;
-    }
+      
     
     /* Supprimer les messages d'erreur flottants éventuels */
     .stAlert, .stException, [data-testid="stAlert"] {
