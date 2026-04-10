@@ -1871,91 +1871,129 @@ elif menu == "🔐 Administration":
             st.info("Aucun atelier trouvé sur cette période.")
             
     with t4:  # STATISTIQUES
-        st.subheader("📈 Statistiques de participation")
+        st.subheader("📈 Statistiques de participation par lieu")
         cs1, cs2 = st.columns(2)
         ds_stat = cs1.date_input("Date début", date.today().replace(day=1), key="stat_d1", format="DD/MM/YYYY")
         de_stat = cs2.date_input("Date fin", date.today(), key="stat_d2", format="DD/MM/YYYY")
+    
+        # Récupérer les ateliers de la période
         try:
             ateliers_bruts = supabase.table("ateliers").select("*").gte("date_atelier", str(ds_stat)).lte("date_atelier", str(de_stat)).order("date_atelier").execute().data or []
         except:
             ateliers_bruts = []
-        lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
-        horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
-        ateliers = []
-        for a in ateliers_bruts:
-            a['lieu_nom'] = lieux_dict.get(a['lieu_id'], '?')
-            a['horaire_lib'] = horaires_dict.get(a['horaire_id'], '?')
-            ateliers.append(a)
-        atelier_ids = [a['id'] for a in ateliers]
-        filtered_ins = []
-        if atelier_ids:
-            try:
-                inscriptions = supabase.table("inscriptions").select("*, adherents(nom, prenom)").in_("atelier_id", atelier_ids).execute().data or []
-                filtered_ins = inscriptions
-            except:
-                filtered_ins = []
-        nb_at_proposes = len(atelier_ids)
-        if filtered_ins and liste_adh:
-            stats_list = []
-            for am_nom in liste_adh:
-                am_id = dict_adh[am_nom]
-                count = sum(1 for x in filtered_ins if x['adherent_id'] == am_id)
-                stats_list.append({"Assistante Maternelle": am_nom, "Nombre d'ateliers": count})
-            df_stats = pd.DataFrame(stats_list).sort_values("Nombre d'ateliers", ascending=False).reset_index(drop=True)
-    
-            # --- STYLE PERSONNALISÉ ---
-            styled_df = df_stats.style.set_properties(**{'background-color': 'white', 'color': 'black'}).set_table_styles([
-                {'selector': 'th', 'props': [('background-color', '#f0f0f0'), ('color', 'black'), ('font-weight', 'bold')]},
-                {'selector': 'td:nth-child(2)', 'props': [('text-align', 'center')]},
-                {'selector': 'th:nth-child(2)', 'props': [('text-align', 'center')]},
-                {'selector': 'table', 'props': [('width', '100%'), ('border-collapse', 'collapse')]},
-                {'selector': 'td, th', 'props': [('padding', '8px'), ('border', '1px solid #ddd')]}
-            ]).hide(axis='index')
-            html_table = styled_df.to_html()
-            st.markdown(html_table, unsafe_allow_html=True)
-    
-            total_inscr = df_stats["Nombre d'ateliers"].sum()
-            st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
-            st.markdown(f"**Nombre d'ateliers proposés sur la période :** {nb_at_proposes}")
-            if ateliers:
-                st.markdown("**Ateliers proposés :**")
-                for at in ateliers:
-                    date_fr = format_date_fr_simple(at['date_atelier'])
-                    st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu_nom']} - {at['horaire_lib']})")
-            ce_s1, ce_s2 = st.columns(2)
-            ce_s1.download_button(
-                "📥 Excel Statistiques",
-                data=export_to_excel_with_period(df_stats, ds_stat, de_stat, "Statistiques de participation"),
-                file_name=f"stats_am_{ds_stat}_{de_stat}.xlsx"
-            )
-            pdf_stat_lines = []
-            for _, r in df_stats.iterrows():
-                pdf_stat_lines.append(f"{r['Assistante Maternelle']} : {r['Nombre d\'ateliers']} atelier(s)")
-            pdf_stat_lines.append("")
-            pdf_stat_lines.append(f"Total inscriptions sur la période : {total_inscr}")
-            pdf_stat_lines.append(f"Ateliers proposés sur la période : {nb_at_proposes}")
-            pdf_stat_lines.append("")
-            pdf_stat_lines.append("Liste des ateliers proposés :")
-            for at in ateliers:
-                date_fr = format_date_fr_simple(at['date_atelier'])
-                pdf_stat_lines.append(f"- {date_fr} : {at['titre']} ({at['lieu_nom']} - {at['horaire_lib']})")
-            ce_s2.download_button(
-                "📥 PDF Statistiques",
-                data=export_stats_pdf("Statistiques de participation AM", pdf_stat_lines, ds_stat, de_stat),
-                file_name=f"stats_am_{ds_stat}_{de_stat}.pdf"
-            )
+        
+        if not ateliers_bruts:
+            st.info("ℹ️ Aucun atelier sur cette période.")
         else:
-            if not liste_adh:
-                st.info("ℹ️ Aucune assistante maternelle enregistrée.")
-            elif not atelier_ids:
-                st.info("ℹ️ Aucun atelier proposé sur cette période.")
+            lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
+            horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+            ateliers = []
+            for a in ateliers_bruts:
+                a['lieu_nom'] = lieux_dict.get(a['lieu_id'], '?')
+                a['horaire_lib'] = horaires_dict.get(a['horaire_id'], '?')
+                ateliers.append(a)
+            
+            atelier_ids = [a['id'] for a in ateliers]
+            if not atelier_ids:
+                st.info("Aucun atelier trouvé.")
             else:
-                st.info("Aucune donnée pour cette période.")
-            if ateliers:
-                st.markdown("**Ateliers proposés sur la période :**")
-                for at in ateliers:
-                    date_fr = format_date_fr_simple(at['date_atelier'])
-                    st.write(f"- {date_fr} : **{at['titre']}** ({at['lieu_nom']} - {at['horaire_lib']})")
+                # Récupérer toutes les inscriptions sur ces ateliers
+                try:
+                    inscriptions = supabase.table("inscriptions").select("*, adherents(nom, prenom)").in_("atelier_id", atelier_ids).execute().data or []
+                except:
+                    inscriptions = []
+                
+                if not inscriptions:
+                    st.info("Aucune inscription sur cette période.")
+                else:
+                    # Construire un DataFrame avec les AM et les lieux
+                    # 1. Lister tous les lieux distincts dans les ateliers de la période
+                    lieux_periode = sorted(set(a['lieu_nom'] for a in ateliers))
+                    
+                    # 2. Compter par (AM, lieu)
+                    from collections import defaultdict
+                    compteur = defaultdict(lambda: defaultdict(int))
+                    
+                    # Mapper atelier_id -> lieu
+                    atelier_lieu = {a['id']: a['lieu_nom'] for a in ateliers}
+                    
+                    for ins in inscriptions:
+                        am_nom = f"{ins['adherents']['prenom']} {ins['adherents']['nom']}"
+                        lieu = atelier_lieu.get(ins['atelier_id'], '?')
+                        compteur[am_nom][lieu] += 1
+                    
+                    # Construire la liste des AM triée
+                    ams = sorted(compteur.keys())
+                    
+                    # Créer le tableau
+                    data_rows = []
+                    for am in ams:
+                        row = {"Assistante Maternelle": am}
+                        total = 0
+                        for lieu in lieux_periode:
+                            nb = compteur[am].get(lieu, 0)
+                            row[lieu] = nb
+                            total += nb
+                        row["Total"] = total
+                        data_rows.append(row)
+                    
+                    df_stats = pd.DataFrame(data_rows)
+                    
+                    # Trier par Total décroissant
+                    df_stats = df_stats.sort_values("Total", ascending=False).reset_index(drop=True)
+                    
+                    # --- Affichage avec style ---
+                    # On formate les colonnes numériques pour qu'elles soient centrées
+                    styled_df = df_stats.style.set_properties(**{'background-color': 'white', 'color': 'black'}).set_table_styles([
+                        {'selector': 'th', 'props': [('background-color', '#f0f0f0'), ('color', 'black'), ('font-weight', 'bold'), ('text-align', 'center')]},
+                        {'selector': 'td', 'props': [('text-align', 'center')]},
+                        {'selector': 'td:first-child', 'props': [('text-align', 'left')]},  # première colonne (nom) alignée à gauche
+                        {'selector': 'th:first-child', 'props': [('text-align', 'left')]},
+                        {'selector': 'table', 'props': [('width', '100%'), ('border-collapse', 'collapse')]},
+                        {'selector': 'td, th', 'props': [('padding', '8px'), ('border', '1px solid #ddd')]}
+                    ]).hide(axis='index')
+                    html_table = styled_df.to_html()
+                    st.markdown(html_table, unsafe_allow_html=True)
+                    
+                    # Totaux généraux
+                    total_inscr = df_stats["Total"].sum()
+                    nb_at_proposes = len(atelier_ids)
+                    st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
+                    st.markdown(f"**Nombre d'ateliers proposés sur la période :** {nb_at_proposes}")
+                    
+                    # Exports Excel et PDF (adapter les exports pour inclure les colonnes par lieu)
+                    # Export Excel (conserve toutes les colonnes)
+                    excel_data = export_to_excel_with_period(df_stats, ds_stat, de_stat, "Statistiques par lieu")
+                    st.download_button(
+                        "📥 Excel Statistiques",
+                        data=excel_data,
+                        file_name=f"stats_lieu_{ds_stat}_{de_stat}.xlsx",
+                        key="stat_excel"
+                    )
+                    
+                    # Export PDF (texte lisible)
+                    pdf_lines = []
+                    pdf_lines.append(f"Periode : du {format_date_fr_simple(str(ds_stat))} au {format_date_fr_simple(str(de_stat))}")
+                    pdf_lines.append("")
+                    for _, row in df_stats.iterrows():
+                        ligne = f"{row['Assistante Maternelle']} : Total {row['Total']}"
+                        details = []
+                        for lieu in lieux_periode:
+                            if row[lieu] > 0:
+                                details.append(f"{lieu} ({row[lieu]})")
+                        if details:
+                            ligne += " - " + ", ".join(details)
+                        pdf_lines.append(ligne)
+                    pdf_lines.append("")
+                    pdf_lines.append(f"Total inscriptions : {total_inscr}")
+                    pdf_lines.append(f"Nombre d'ateliers : {nb_at_proposes}")
+                    pdf_data = export_stats_pdf("Statistiques de participation par lieu", pdf_lines, ds_stat, de_stat)
+                    st.download_button(
+                        "📥 PDF Statistiques",
+                        data=pdf_data,
+                        file_name=f"stats_lieu_{ds_stat}_{de_stat}.pdf",
+                        key="stat_pdf"
+                    )
                 
     with t5:  # 👥 LISTE AM
         st.subheader("👥 Gestion des Assistantes Maternelles")
