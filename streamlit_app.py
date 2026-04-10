@@ -1467,7 +1467,6 @@ elif menu == "🔐 Administration":
                         use_container_width=True,
                         key="editor_ateliers"
                     )
-                    )
                     if st.button("💾 Enregistrer"):
                         to_db = []
                         for _, r in df_ed.iterrows():
