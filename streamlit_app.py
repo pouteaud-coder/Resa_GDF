@@ -203,6 +203,32 @@ st.markdown("""
         background-color: #f0f0f0 !important;
         color: #000000 !important;
     }
+        /* Forcer l'affichage du tableau générateur (texte noir sur fond blanc) */
+    .stDataFrame,
+    .stDataFrame *,
+    div[data-testid="stDataFrame"] *,
+    div[data-testid="stDataFrame"] td,
+    div[data-testid="stDataFrame"] th,
+    div[data-testid="stDataFrame"] div,
+    div[data-testid="stDataFrame"] span,
+    div[data-testid="stDataFrame"] input,
+    div[data-testid="stDataFrame"] textarea,
+    [data-testid="stDataFrame"] [role="gridcell"] {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+        border-color: #cccccc !important;
+    }
+    [data-testid="stDataFrame"] th {
+        background-color: #f0f0f0 !important;
+        font-weight: bold !important;
+    }
+    /* Pour les cellules éditables */
+    [data-testid="stDataFrame"] input,
+    [data-testid="stDataFrame"] textarea {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border: 1px solid #cccccc !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
