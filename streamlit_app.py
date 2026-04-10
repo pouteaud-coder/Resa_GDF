@@ -1445,16 +1445,7 @@ elif menu == "🔐 Administration":
                     st.rerun()
                 
                 if st.session_state['at_list_gen']:
-                    st.markdown("""
-                    <style>
-                    [data-testid="stDataFrame"] { background-color: #ffffff !important; color: #000000 !important; }
-                    [data-testid="stDataFrame"] * { color: #000000 !important; background-color: #ffffff !important; }
-                    [data-testid="stDataFrame"] table { background-color: #ffffff !important; }
-                    [data-testid="stDataFrame"] th { background-color: #f0f0f0 !important; color: #000000 !important; }
-                    [data-testid="stDataFrame"] td { color: #000000 !important; }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    df_ed = st.data_editor(
+                        df_ed = st.data_editor(
                         pd.DataFrame(st.session_state['at_list_gen']),
                         num_rows="dynamic",
                         column_config={
