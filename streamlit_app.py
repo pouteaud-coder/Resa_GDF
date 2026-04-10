@@ -221,6 +221,24 @@ st.markdown("""
         background-color: #1b5e20 !important;
         color: white !important;
     }
+        /* Correction affichage tableau générateur (texte noir sur fond blanc) */
+    div[data-testid="stDataFrame"] td,
+    div[data-testid="stDataFrame"] th,
+    div[data-testid="stDataFrame"] span,
+    div[data-testid="stDataFrame"] input,
+    div[data-testid="stDataFrame"] textarea {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+    }
+    div[data-testid="stDataFrame"] input,
+    div[data-testid="stDataFrame"] textarea {
+        background-color: #ffffff !important;
+        border: 1px solid #ccc !important;
+    }
+    div[data-testid="stDataFrame"] th {
+        background-color: #f0f0f0 !important;
+        color: #000000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
