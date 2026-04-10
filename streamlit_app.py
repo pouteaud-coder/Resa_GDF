@@ -139,6 +139,24 @@ st.markdown("""
         background-color: #b2dfdb !important;
         font-weight: bold !important;
     }
+    /* Correction du multiselect des jours dans le générateur d'ateliers */
+    .stMultiSelect [data-baseweb="select"] div[data-testid="stMarkdownContainer"] {
+        overflow: visible !important;
+    }
+    .stMultiSelect [data-baseweb="select"] div[data-testid="stMarkdownContainer"] p {
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: nowrap !important;
+        padding-left: 4px;
+    }
+    .stMultiSelect [data-baseweb="select"] span {
+        max-width: none !important;
+        overflow: visible !important;
+    }
+    .stMultiSelect [data-baseweb="select"] {
+        min-width: 160px !important;
+    }
+
     </style>
     """, unsafe_allow_html=True)
 
