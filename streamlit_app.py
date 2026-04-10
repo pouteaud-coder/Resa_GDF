@@ -595,7 +595,7 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
     pdf.ln(6)
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
-        pdf.cell(0, 10, txt="Aucun atelier trouvé sur cette période.", ln=True)
+        pdf.cell(0, 10, txt=normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
         return pdf.output(dest='S')
     for a in ateliers_data:
         ins_at = get_inscrits_fn(a['id'])
@@ -639,12 +639,12 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_
     pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
     pdf.ln(2)
     pdf.set_font("Arial", 'I', 11)
-    periode_str = f"Période : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
+    periode_str = f"Periode : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
     pdf.cell(0, 8, normaliser_pdf_text(periode_str), ln=True, align='C')
     pdf.ln(4)
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
-        pdf.cell(0, 10, txt="Aucun atelier trouvé sur cette période.", ln=True)
+        pdf.cell(0, 10, txt=normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
         return pdf.output(dest='S')
     for a in ateliers_data:
         ins_at = get_inscrits_fn(a['id'])
