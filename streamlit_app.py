@@ -156,16 +156,25 @@ st.markdown("""
     .stMultiSelect [data-baseweb="select"] {
         min-width: 160px !important;
     }
-    /* Forcer l'affichage permanent des cases à cocher */
-    .stCheckbox input {
+    /* Forcer l'affichage permanent des cases à cocher Streamlit */
+    div[data-testid="stCheckbox"] {
+        display: inline-flex !important;
+        align-items: center !important;
+        visibility: visible !important;
+    }
+    div[data-testid="stCheckbox"] input {
         opacity: 1 !important;
         visibility: visible !important;
         margin-right: 8px !important;
+        accent-color: #1b5e20 !important;
+        width: 16px !important;
+        height: 16px !important;
+        background-color: white !important;
     }
-    .stCheckbox label {
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 6px !important;
+    div[data-testid="stCheckbox"] label {
+        display: inline !important;
+        color: #1b5e20 !important;
+        visibility: visible !important;
     }
     </style>
     """, unsafe_allow_html=True)
