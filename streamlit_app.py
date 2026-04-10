@@ -87,28 +87,6 @@ st.markdown("""
         color: #1b5e20 !important;
         transition: all 0.2s;
     }
-        /* Style pour les boutons d'action groupée */
-    [data-testid="column"] .stButton button[kind="primary"] {
-        background-color: transparent !important;
-        border: 2px solid #80cbc4 !important;
-        color: #1b5e20 !important;
-        font-weight: bold;
-    }
-    [data-testid="column"] .stButton button[kind="secondary"] {
-        background-color: transparent !important;
-        border: 1.5px solid #80cbc4 !important;
-        color: #1b5e20 !important;
-    }
-    /* Correction affichage jours dans générateur ateliers */
-    .stMultiSelect [data-baseweb="select"] {
-        min-width: 140px;
-    }
-    .stMultiSelect [data-baseweb="select"] div[data-testid="stMarkdownContainer"] p {
-        padding-left: 6px;
-        white-space: nowrap;
-        overflow: visible !important;
-    }           
-    
     div[data-testid="column"] .stButton button[kind="primary"] {
         background-color: #a8e6cf !important;
         color: #1b5e20 !important;
@@ -139,28 +117,8 @@ st.markdown("""
         background-color: #b2dfdb !important;
         font-weight: bold !important;
     }
-    /* Correction du multiselect des jours dans le générateur d'ateliers */
-    .stMultiSelect [data-baseweb="select"] div[data-testid="stMarkdownContainer"] {
-        overflow: visible !important;
-    }
-    .stMultiSelect [data-baseweb="select"] div[data-testid="stMarkdownContainer"] p {
-        overflow: visible !important;
-        text-overflow: clip !important;
-        white-space: nowrap !important;
-        padding-left: 4px;
-    }
-    .stMultiSelect [data-baseweb="select"] span {
-        max-width: none !important;
-        overflow: visible !important;
-    }
-    .stMultiSelect [data-baseweb="select"] {
-        min-width: 160px !important;
-    }
-
     </style>
     """, unsafe_allow_html=True)
-
-
 
 # --- FONCTIONS UTILITAIRES ---
 def get_color(nom_lieu):
@@ -196,19 +154,11 @@ def set_max_enfants(valeur):
     except Exception as e:
         return str(e)
 
-def get_current_code():
-    """Récupère le code secret admin actuel en base de données."""
-    try:
-        res = supabase.table("configuration").select("secret_code").eq("id", "main_config").execute()
-        return res.data[0]['secret_code'] if res.data else "1234"
-    except:
-        return "1234"
-
-def get_max_enfants_atelier(at, default_max):
+def get_max_enfants_atelier(at):
     val = at.get('max_enfants')
     if val is not None:
         return int(val)
-    return default_max
+    return MAX_ENFANTS
 
 def heure_paris_fr():
     jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -560,11 +510,11 @@ def filtre_vert_menthe(label_key, options=("Tous", "Actifs", "Inactifs"), defaul
 
 # --- DIALOGUES ---
 @st.dialog("⚠️ Confirmation")
-def secure_delete_dialog(table, item_id, label):   # plus de paramètre current_code
+def secure_delete_dialog(table, item_id, label, current_code):
     st.write(f"Voulez-vous vraiment désactiver/supprimer : **{label}** ?")
     pw = st.text_input("Code secret admin", type="password")
     if st.button("Confirmer", type="primary"):
-        if pw == get_current_code() or pw == "0000":
+        if pw == current_code or pw == "0000":
             supabase.table(table).update({"est_actif": False}).eq("id", item_id).execute()
             st.success("Opération réussie"); st.rerun()
         else: st.error("Code incorrect")
@@ -579,11 +529,11 @@ def edit_am_dialog(am_id, nom_actuel, prenom_actuel):
             st.success("Modifié !"); st.rerun()
 
 @st.dialog("⚠️ Suppression Atelier")
-def delete_atelier_dialog(at_id, titre, a_des_inscrits):
+def delete_atelier_dialog(at_id, titre, a_des_inscrits, current_code):
     st.warning(f"Voulez-vous supprimer l'atelier : **{titre}** ?")
     pw = st.text_input("Code secret admin", type="password")
     if st.button("Confirmer la suppression définitive"):
-        if pw == get_current_code() or pw == "0000":
+        if pw == current_code or pw == "0000":
             if a_des_inscrits: supabase.table("inscriptions").delete().eq("atelier_id", at_id).execute()
             supabase.table("ateliers").delete().eq("id", at_id).execute()
             st.rerun()
@@ -858,7 +808,7 @@ if menu == "🎯 Animateur":
                 ins_data = []
 
             total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
-            max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
+            max_enf_at = get_max_enfants_atelier(at)
             total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])
             places_enfants_restantes = max(max_enf_at - total_enfants_actuel, 0)
 
@@ -987,7 +937,7 @@ elif menu == "📝 Inscriptions":
                         ins_data = []
 
                     anim_id_at = at.get('animateur_id')
-                    max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
+                    max_enf_at = get_max_enfants_atelier(at)
                     capacite_max = at['capacite_max']
                     
                     # Calculs
@@ -1018,7 +968,12 @@ elif menu == "📝 Inscriptions":
 
                             if anim_ins:
                                 n_a = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
-                                st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span class="animateur-badge">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                                if is_verrouille(at):
+                                    st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                                else:
+                                    col_a1, col_a2 = st.columns([0.88, 0.12])
+                                    col_a1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                                    col_a2.write("🔒")
 
                             # Autres inscriptions : ligne avec nom, champ nombre, bouton Modifier, bouton Désinscrire
                             for p in autres_tries:
@@ -1186,7 +1141,7 @@ elif menu == "📊 Suivi & Récap":
                 restantes = a['capacite_max'] - (t_ad + t_en)
                 
                 # --- Calcul des places enfants restantes ---
-                max_enf_at = get_max_enfants_atelier(a, MAX_ENFANTS)
+                max_enf_at = get_max_enfants_atelier(a)
                 nb_enfants_inscrits = t_en
                 places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                 if places_enfants_restantes == 0:
@@ -1290,28 +1245,12 @@ elif menu == "🔐 Administration":
                     lieu_par_defaut = st.selectbox("Lieu par défaut pour les nouvelles lignes :", options=[""] + l_list)
                 with col_horaire:
                     horaire_par_defaut = st.selectbox("Horaire par défaut pour les nouvelles lignes :", options=[""] + h_list)
-                
                 c1, c2 = st.columns(2)
                 d1 = c1.date_input("Début", date.today(), format="DD/MM/YYYY", key="gen_d1")
                 d2 = c2.date_input("Fin", date.today() + timedelta(days=7), format="DD/MM/YYYY", key="gen_d2")
-                
-                # Gestion des jours avec cases à cocher
-                st.markdown("**Jours de la semaine (cochez ceux souhaités)**")
-                cols_jours = st.columns(5)
-                jours_options = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
-                jours_selected = []
-                for idx, jour in enumerate(jours_options):
-                    with cols_jours[idx]:
-                        if f"chk_{jour}" not in st.session_state:
-                            st.session_state[f"chk_{jour}"] = (jour in ["Lundi", "Jeudi"])
-                        checked = st.checkbox(jour, key=f"chk_{jour}", value=st.session_state[f"chk_{jour}"])
-                        if checked:
-                            jours_selected.append(jour)
-                jours = jours_selected
-                
+                jours = st.multiselect("Jours", ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"], default=["Lundi", "Jeudi"])
                 if st.button("📊 Générer les lignes"):
-                    tmp = []
-                    curr = d1
+                    tmp, curr = [], d1
                     while curr <= d2:
                         js_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
                         if js_fr[curr.weekday()] in jours:
@@ -1331,7 +1270,6 @@ elif menu == "🔐 Administration":
                         curr += timedelta(days=1)
                     st.session_state['at_list_gen'] = tmp
                     st.rerun()
-                
                 if st.session_state['at_list_gen']:
                     st.markdown("""
                     <style>
@@ -1346,7 +1284,6 @@ elif menu == "🔐 Administration":
                         pd.DataFrame(st.session_state['at_list_gen']),
                         num_rows="dynamic",
                         column_config={
-                            "Date": st.column_config.TextColumn("Date", width="large"),
                             "Lieu": st.column_config.SelectboxColumn(options=l_list, required=False),
                             "Horaire": st.column_config.SelectboxColumn(options=h_list, required=False),
                             "Max Enfants": st.column_config.NumberColumn(
@@ -1423,7 +1360,7 @@ elif menu == "🔐 Administration":
                 except:
                     inscriptions = []
                 nb_enfants_inscrits = sum([i['nb_enfants'] for i in inscriptions])
-                max_enf_at = get_max_enfants_atelier(a, MAX_ENFANTS)
+                max_enf_at = get_max_enfants_atelier(a)
                 places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                 a['places_enfants_restantes'] = places_enfants_restantes
                 a['nb_enfants_inscrits'] = nb_enfants_inscrits
@@ -1450,13 +1387,8 @@ elif menu == "🔐 Administration":
                     else:
                         statut_enfants = f"👶 {a['places_enfants_restantes']} pl. enfants"
                     
-                    # Vérifier la capacité totale (salle saturée)
-                    try:
-                        ins_data = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", a['id']).execute()
-                        inscriptions_list = ins_data.data if ins_data.data else []
-                    except:
-                        inscriptions_list = []
-                    total_occ = sum([1 + i['nb_enfants'] for i in inscriptions_list])
+                    # Optionnel : vérifier si la capacité totale est dépassée (pour affichage)
+                    total_occ = sum([1 + i['nb_enfants'] for i in inscriptions]) if 'inscriptions' in locals() else 0
                     capacite_depassee = total_occ > a['capacite_max']
                     if capacite_depassee:
                         statut_enfants += " ⚠️ Salle saturée"
@@ -1485,7 +1417,7 @@ elif menu == "🔐 Administration":
                             cnt = supabase.table("inscriptions").select("id", count="exact").eq("atelier_id", a['id']).execute().count or 0
                         except:
                             cnt = 0
-                        delete_atelier_dialog(a['id'], a['titre'], cnt > 0)
+                        delete_atelier_dialog(a['id'], a['titre'], cnt > 0, current_code)
                     if anim_nom_rep:
                         if cf_anim.button("⭐ Changer anim.", key=f"at_anim_chg_{a['id']}"):
                             dialog_attribuer_animateur(a['id'], a['titre'], anim_id_at, anim_nom_rep, liste_adh_anim, dict_adh_anim, auteur="Admin")
@@ -1494,37 +1426,13 @@ elif menu == "🔐 Administration":
                             dialog_attribuer_animateur(a['id'], a['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur="Admin")
                                 
         elif sub == "Actions groupées":
-            # Initialisation de l'état si nécessaire
-            if "bulk_action" not in st.session_state:
-                st.session_state["bulk_action"] = "Activer"
-        
-            st.markdown("**Action à appliquer :**")
-            col_act, col_desact = st.columns(2)
-            with col_act:
-                if st.button(
-                    "✅ Activer",
-                    key="bulk_activer",
-                    use_container_width=True,
-                    type="primary" if st.session_state["bulk_action"] == "Activer" else "secondary"
-                ):
-                    st.session_state["bulk_action"] = "Activer"
-                    st.rerun()
-            with col_desact:
-                if st.button(
-                    "❌ Désactiver",
-                    key="bulk_desactiver",
-                    use_container_width=True,
-                    type="primary" if st.session_state["bulk_action"] == "Désactiver" else "secondary"
-                ):
-                    st.session_state["bulk_action"] = "Désactiver"
-                    st.rerun()
-        
             with st.form("bulk_form"):
                 c1, c2 = st.columns(2)
                 bs = c1.date_input("Début", format="DD/MM/YYYY", key="blk_d1")
                 be = c2.date_input("Fin", format="DD/MM/YYYY", key="blk_d2")
+                action = st.radio("Action :", ["Activer", "Désactiver"], horizontal=True)
                 if st.form_submit_button("🚀 Appliquer"):
-                    supabase.table("ateliers").update({"est_actif": (st.session_state["bulk_action"] == "Activer")}).gte("date_atelier", str(bs)).lte("date_atelier", str(be)).execute()
+                    supabase.table("ateliers").update({"est_actif": (action=="Activer")}).gte("date_atelier", str(bs)).lte("date_atelier", str(be)).execute()
                     st.rerun()
 
     with t2:  # SUIVI AM (Admin)
@@ -1649,7 +1557,7 @@ elif menu == "🔐 Administration":
                 restantes = a['capacite_max'] - (t_ad + t_en)  # places totales restantes (peut être négatif)
                 
                 # --- Calcul des places enfants restantes ---
-                max_enf_at = get_max_enfants_atelier(a, MAX_ENFANTS)
+                max_enf_at = get_max_enfants_atelier(a)
                 nb_enfants_inscrits = t_en  # total enfants déjà inscrits (inclut animateur)
                 places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                 if places_enfants_restantes == 0:
@@ -1949,7 +1857,7 @@ elif menu == "🔐 Administration":
                 if c_edit.button("✏️", key=f"am_edit_{u['id']}", help="Modifier le nom/prénom"):
                     edit_am_dialog(u['id'], u['nom'], u['prenom'])
                 if c_del.button("🗑️", key=f"am_del_{u['id']}"):
-                    secure_delete_dialog("adherents", u['id'], f"{u['prenom']} {u['nom']}")
+                    secure_delete_dialog("adherents", u['id'], f"{u['prenom']} {u['nom']}", current_code)
 
     with t6:  # 📍 LIEUX / HORAIRES
         refresh_referentials()
@@ -2025,7 +1933,7 @@ elif menu == "🔐 Administration":
         with st.form("sec_form"):
             o, n = st.text_input("Ancien code", type="password"), st.text_input("Nouveau code", type="password")
             if st.form_submit_button("Changer le code"):
-                if o == current_code() or o == "0000":
+                if o == current_code or o == "0000":
                     try:
                         supabase.table("configuration").update({"secret_code": n}).eq("id", "main_config").execute()
                         st.success("Code modifié avec succès !")
@@ -2125,7 +2033,7 @@ elif menu == "🔐 Administration":
                     ins_data = []
 
                 total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
-                max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
+                max_enf_at = get_max_enfants_atelier(at)
                 total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])
                 places_enfants_restantes = max(max_enf_at - total_enfants_actuel, 0)
 
