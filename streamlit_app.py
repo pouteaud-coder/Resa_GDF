@@ -968,12 +968,7 @@ elif menu == "📝 Inscriptions":
 
                             if anim_ins:
                                 n_a = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
-                                if is_verrouille(at):
-                                    st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
-                                else:
-                                    col_a1, col_a2 = st.columns([0.88, 0.12])
-                                    col_a1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
-                                    col_a2.write("🔒")
+                                st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span class="animateur-badge">ANIMATEUR</span></span>', unsafe_allow_html=True)
 
                             # Autres inscriptions : ligne avec nom, champ nombre, bouton Modifier, bouton Désinscrire
                             for p in autres_tries:
