@@ -210,7 +210,17 @@ st.markdown("""
     }
     div[data-testid="stCheckbox"] label {
         all: revert !important;
-    }    
+    }
+        /* Personnalisation des pills (sélection multiple) */
+    .stPills [data-baseweb="tag"] {
+        background-color: #80cbc4 !important;
+        color: #1b5e20 !important;
+        border: 1px solid #1b5e20 !important;
+    }
+    .stPills [data-baseweb="tag"][aria-selected="true"] {
+        background-color: #1b5e20 !important;
+        color: white !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1350,19 +1360,18 @@ elif menu == "🔐 Administration":
                 d2 = c2.date_input("Fin", date.today() + timedelta(days=7), format="DD/MM/YYYY", key="gen_d2")
                 
                 # Gestion des jours avec cases à cocher
-                st.markdown("**Jours de la semaine (cochez ceux souhaités)**")
-                cols_jours = st.columns(5)
+                st.markdown("**Jours de la semaine (cliquez sur les jours souhaités)**")
                 jours_options = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
-                jours_selected = []
-                for idx, jour in enumerate(jours_options):
-                    with cols_jours[idx]:
-                        # Initialisation à False (non coché) pour chaque jour
-                        if f"chk_{jour}" not in st.session_state:
-                            st.session_state[f"chk_{jour}"] = False
-                        checked = st.checkbox(jour, key=f"chk_{jour}", value=st.session_state[f"chk_{jour}"])
-                        if checked:
-                            jours_selected.append(jour)
-                jours = jours_selected
+                if "jours_pills" not in st.session_state:
+                    st.session_state.jours_pills = []   # Aucun jour sélectionné par défaut
+                jours = st.pills(
+                    label="",
+                    options=jours_options,
+                    selection_mode="multi",
+                    default=st.session_state.jours_pills,
+                    key="jours_pills_widget"
+                )
+                st.session_state.jours_pills = jours
                 
                 if st.button("📊 Générer les lignes"):
                     tmp = []
