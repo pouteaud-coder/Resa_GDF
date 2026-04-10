@@ -325,14 +325,12 @@ def get_max_enfants_atelier(at, default_max):
     return default_max
 
 def normaliser_pdf_text(texte):
-    """Remplace les caractères accentués et spéciaux pour le PDF (latin1)."""
+    """Convertit le texte en ASCII (supprime accents et caractères spéciaux)."""
     if not isinstance(texte, str):
         texte = str(texte)
-    # Décompose les caractères accentués (ex: é -> e + diacritique)
-    texte = unicodedata.normalize('NFD', texte)
-    # Supprime les diacritiques (accents, cédilles, etc.)
-    texte = ''.join(c for c in texte if not unicodedata.combining(c))
-    # Remplacements manuels pour les symboles courants
+    # Décompose les caractères accentués et supprime les diacritiques
+    texte = unicodedata.normalize('NFKD', texte).encode('ascii', 'ignore').decode('ascii')
+    # Remplacements manuels pour quelques symboles
     remplacements = {
         'œ': 'oe', 'æ': 'ae',
         'Œ': 'OE', 'Æ': 'AE',
