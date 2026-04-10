@@ -176,6 +176,17 @@ st.markdown("""
         color: #1b5e20 !important;
         visibility: visible !important;
     }
+    /* Supprimer les bordures rouges sur les cases à cocher */
+    div[data-testid="stCheckbox"] input {
+        outline: none !important;
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+    }
+    div[data-testid="stCheckbox"] input:focus {
+        outline: none !important;
+        box-shadow: none !important;
+        border: 1px solid #1b5e20 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
