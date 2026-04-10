@@ -197,7 +197,20 @@ st.markdown("""
     .stAlert, .stException, [data-testid="stAlert"] {
         display: none !important;
     }
-        
+        /* Réinitialisation complète des cases à cocher */
+    div[data-testid="stCheckbox"] {
+        all: revert !important;
+    }
+    div[data-testid="stCheckbox"] input {
+        all: revert !important;
+        width: auto !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    div[data-testid="stCheckbox"] label {
+        all: revert !important;
+    }    
     </style>
     """, unsafe_allow_html=True)
 
