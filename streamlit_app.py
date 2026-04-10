@@ -1445,18 +1445,18 @@ elif menu == "🔐 Administration":
                     st.rerun()
                 
                 if st.session_state['at_list_gen']:
-                        df_ed = st.data_editor(
-                        pd.DataFrame(st.session_state['at_list_gen']),
-                        num_rows="dynamic",
-                        column_config={
-                            "Lieu": st.column_config.SelectboxColumn(options=l_list, required=False),
-                            "Horaire": st.column_config.SelectboxColumn(options=h_list, required=False),
-                            "Actif": st.column_config.CheckboxColumn(default=False),
-                            "Verrouillé": st.column_config.CheckboxColumn(default=False)
-                            # "Date" et "Max Enfants" ne sont pas configurées → style par défaut
-                        },
-                        use_container_width=True,
-                        key="editor_ateliers"
+                    df_ed = st.data_editor(
+                    pd.DataFrame(st.session_state['at_list_gen']),
+                    num_rows="dynamic",
+                    column_config={
+                        "Lieu": st.column_config.SelectboxColumn(options=l_list, required=False),
+                        "Horaire": st.column_config.SelectboxColumn(options=h_list, required=False),
+                        "Actif": st.column_config.CheckboxColumn(default=False),
+                        "Verrouillé": st.column_config.CheckboxColumn(default=False)
+                        # "Date" et "Max Enfants" ne sont pas configurées → style par défaut
+                    },
+                    use_container_width=True,
+                    key="editor_ateliers"
                     )
                     if st.button("💾 Enregistrer"):
                         to_db = []
