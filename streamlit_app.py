@@ -1281,41 +1281,27 @@ elif menu == "🔐 Administration":
         sub = st.session_state["admin_atelier_mode"]
 
         if sub == "Générateur":
-            if not l_raw or not h_raw:
-                st.error("⛔ Impossible de générer des ateliers : aucun lieu ou horaire n'est encore défini.")
-                st.info("👉 Allez d'abord dans l'onglet **📍 Lieux / Horaires** pour créer au moins un lieu et un horaire.")
-            else:
-                col_lieu, col_horaire = st.columns(2)
-                with col_lieu:
-                    lieu_par_defaut = st.selectbox("Lieu par défaut pour les nouvelles lignes :", options=[""] + l_list)
-                with col_horaire:
-                    horaire_par_defaut = st.selectbox("Horaire par défaut pour les nouvelles lignes :", options=[""] + h_list)
-                c1, c2 = st.columns(2)
-                d1 = c1.date_input("Début", date.today(), format="DD/MM/YYYY", key="gen_d1")
-                d2 = c2.date_input("Fin", date.today() + timedelta(days=7), format="DD/MM/YYYY", key="gen_d2")
-                # Gestion des jours sélectionnés avec des boutons à bascule
-                if "jours_selected" not in st.session_state:
-                    st.session_state.jours_selected = ["Lundi", "Jeudi"]
-                
-                st.markdown("**Jours de la semaine**")
-                cols_jours = st.columns(5)
-                jours_options = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
-                for idx, jour in enumerate(jours_options):
-                    with cols_jours[idx]:
-                        if st.button(
-                            jour,
-                            key=f"jour_{jour}",
-                            type="primary" if jour in st.session_state.jours_selected else "secondary",
-                            use_container_width=True
-                        ):
-                            if jour in st.session_state.jours_selected:
-                                st.session_state.jours_selected.remove(jour)
-                            else:
-                                st.session_state.jours_selected.append(jour)
-                            st.rerun()
-                jours = st.session_state.jours_selected
-                if st.button("📊 Générer les lignes"):
-                    tmp, curr = [], d1
+            # ... (lieu par défaut, horaire par défaut)
+            c1, c2 = st.columns(2)
+            d1 = c1.date_input("Début", date.today(), format="DD/MM/YYYY", key="gen_d1")
+            d2 = c2.date_input("Fin", date.today() + timedelta(days=7), format="DD/MM/YYYY", key="gen_d2")
+            
+            # Nouvelle gestion des jours avec cases à cocher
+            st.markdown("**Jours de la semaine (cochez ceux souhaités)**")
+            cols_jours = st.columns(5)
+            jours_options = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
+            jours_selected = []
+            for idx, jour in enumerate(jours_options):
+                with cols_jours[idx]:
+                    if f"chk_{jour}" not in st.session_state:
+                        st.session_state[f"chk_{jour}"] = (jour in ["Lundi", "Jeudi"])
+                    checked = st.checkbox(jour, key=f"chk_{jour}", value=st.session_state[f"chk_{jour}"])
+                    if checked:
+                        jours_selected.append(jour)
+            jours = jours_selected
+            
+            if st.button("📊 Générer les lignes"):
+                           tmp, curr = [], d1
                     while curr <= d2:
                         js_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
                         if js_fr[curr.weekday()] in jours:
