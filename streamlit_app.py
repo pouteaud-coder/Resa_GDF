@@ -5,7 +5,9 @@ from zoneinfo import ZoneInfo
 from supabase import create_client, Client
 import hashlib
 import io
+import unicodedata
 from fpdf import FPDF
+
 
 # ==========================================
 # CONFIGURATION ET INITIALISATION
@@ -323,27 +325,26 @@ def get_max_enfants_atelier(at, default_max):
     return default_max
 
 def normaliser_pdf_text(texte):
-    """Remplace les caractères accentués par des non accentués pour le PDF."""
+    """Remplace les caractères accentués et spéciaux pour le PDF (latin1)."""
     if not isinstance(texte, str):
         texte = str(texte)
-    mapping = {
-        'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-        'à': 'a', 'â': 'a', 'ä': 'a',
-        'î': 'i', 'ï': 'i',
-        'ô': 'o', 'ö': 'o',
-        'ù': 'u', 'û': 'u', 'ü': 'u',
-        'ç': 'c',
+    # Décompose les caractères accentués (ex: é -> e + diacritique)
+    texte = unicodedata.normalize('NFD', texte)
+    # Supprime les diacritiques (accents, cédilles, etc.)
+    texte = ''.join(c for c in texte if not unicodedata.combining(c))
+    # Remplacements manuels pour les symboles courants
+    remplacements = {
         'œ': 'oe', 'æ': 'ae',
-        'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
-        'À': 'A', 'Â': 'A', 'Ä': 'A',
-        'Î': 'I', 'Ï': 'I',
-        'Ô': 'O', 'Ö': 'O',
-        'Ù': 'U', 'Û': 'U', 'Ü': 'U',
-        'Ç': 'C',
-        'Œ': 'OE', 'Æ': 'AE'
+        'Œ': 'OE', 'Æ': 'AE',
+        '—': '-', '–': '-',
+        '…': '...',
+        '“': '"', '”': '"', '«': '"', '»': '"',
+        '‘': "'", '’': "'",
+        '©': '(c)', '®': '(r)',
+        '€': 'EUR', '£': 'GBP', '¥': 'YEN',
     }
-    for acc, rem in mapping.items():
-        texte = texte.replace(acc, rem)
+    for src, dst in remplacements.items():
+        texte = texte.replace(src, dst)
     return texte
 
 def heure_paris_fr():
@@ -529,11 +530,11 @@ def export_to_pdf(title, data_list):
     pdf.ln(10)
     pdf.set_font("Arial", size=11)
     if not data_list:
-        pdf.multi_cell(0, 10, txt="Aucune donnée à exporter.")
+        pdf.multi_cell(0, 10, txt=normaliser_pdf_text("Aucune donnee a exporter."))
     else:
         for line in data_list:
             pdf.multi_cell(0, 10, txt=normaliser_pdf_text(line))
-    return pdf.output(dest='S').encode('latin-1')
+    return pdf.output(dest='S')
 
 def export_stats_pdf(title, data_list, date_debut, date_fin):
     pdf = FPDF()
@@ -542,16 +543,16 @@ def export_stats_pdf(title, data_list, date_debut, date_fin):
     pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
     pdf.ln(4)
     pdf.set_font("Arial", 'I', 11)
-    periode_str = f"Période : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
+    periode_str = f"Periode : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
     pdf.cell(0, 8, normaliser_pdf_text(periode_str), ln=True, align='C')
     pdf.ln(8)
     pdf.set_font("Arial", size=11)
     if not data_list:
-        pdf.multi_cell(0, 10, txt="Aucune donnée à exporter.")
+        pdf.multi_cell(0, 10, txt=normaliser_pdf_text("Aucune donnee a exporter."))
     else:
         for line in data_list:
             pdf.multi_cell(0, 10, txt=normaliser_pdf_text(line))
-    return pdf.output(dest='S').encode('latin-1')
+    return pdf.output(dest='S')
 
 def export_suivi_am_pdf(title, data_triee):
     pdf = FPDF()
@@ -561,8 +562,8 @@ def export_suivi_am_pdf(title, data_triee):
     pdf.ln(6)
     if not data_triee:
         pdf.set_font("Arial", size=11)
-        pdf.cell(0, 10, txt="Aucune inscription trouvée.", ln=True)
-        return pdf.output(dest='S').encode('latin-1')
+        pdf.cell(0, 10, normaliser_pdf_text("Aucune inscription trouvee."), ln=True)
+        return pdf.output(dest='S')
     curr_am = ""
     for i in data_triee:
         nom_am = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
@@ -585,7 +586,7 @@ def export_suivi_am_pdf(title, data_triee):
         pdf.set_font("Arial", size=10)
         detail = f"     {titre_at}  |  {lieu}  |  {horaire}  |  {nb_enf} enfant(s)"
         pdf.cell(0, 6, normaliser_pdf_text(detail), ln=True)
-    return pdf.output(dest='S').encode('latin-1')
+    return pdf.output(dest='S')
 
 def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateurs_dict=None):
     pdf = FPDF()
@@ -595,7 +596,7 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
     pdf.ln(6)
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
-        pdf.cell(0, 10, txt=normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
+        pdf.cell(0, 10, normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
         return pdf.output(dest='S')
     for a in ateliers_data:
         ins_at = get_inscrits_fn(a['id'])
@@ -644,7 +645,7 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_
     pdf.ln(4)
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
-        pdf.cell(0, 10, txt=normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
+        pdf.cell(0, 10, normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
         return pdf.output(dest='S')
     for a in ateliers_data:
         ins_at = get_inscrits_fn(a['id'])
