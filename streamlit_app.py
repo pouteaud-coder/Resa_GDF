@@ -155,80 +155,8 @@ st.markdown("""
     }
     .stMultiSelect [data-baseweb="select"] {
         min-width: 160px !important;
-      
-    
-    /* Supprimer les messages d'erreur flottants éventuels */
-    .stAlert, .stException, [data-testid="stAlert"] {
-        display: none !important;
     }
-        /* Réinitialisation complète des cases à cocher */
-    div[data-testid="stCheckbox"] {
-        all: revert !important;
-    }
-    div[data-testid="stCheckbox"] input {
-        all: revert !important;
-        width: auto !important;
-        height: auto !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    div[data-testid="stCheckbox"] label {
-        all: revert !important;
-    }
-        /* Personnalisation des pills (sélection multiple) */
-    .stPills [data-baseweb="tag"] {
-        background-color: #80cbc4 !important;
-        color: #1b5e20 !important;
-        border: 1px solid #1b5e20 !important;
-    }
-    .stPills [data-baseweb="tag"][aria-selected="true"] {
-        background-color: #1b5e20 !important;
-        color: white !important;
-    }
-        /* Correction affichage tableau générateur (texte noir sur fond blanc) */
-    div[data-testid="stDataFrame"] td,
-    div[data-testid="stDataFrame"] th,
-    div[data-testid="stDataFrame"] span,
-    div[data-testid="stDataFrame"] input,
-    div[data-testid="stDataFrame"] textarea {
-        color: #000000 !important;
-        background-color: #ffffff !important;
-    }
-    div[data-testid="stDataFrame"] input,
-    div[data-testid="stDataFrame"] textarea {
-        background-color: #ffffff !important;
-        border: 1px solid #ccc !important;
-    }
-    div[data-testid="stDataFrame"] th {
-        background-color: #f0f0f0 !important;
-        color: #000000 !important;
-    }
-        /* Forcer l'affichage du tableau générateur (texte noir sur fond blanc) */
-    .stDataFrame,
-    .stDataFrame *,
-    div[data-testid="stDataFrame"] *,
-    div[data-testid="stDataFrame"] td,
-    div[data-testid="stDataFrame"] th,
-    div[data-testid="stDataFrame"] div,
-    div[data-testid="stDataFrame"] span,
-    div[data-testid="stDataFrame"] input,
-    div[data-testid="stDataFrame"] textarea,
-    [data-testid="stDataFrame"] [role="gridcell"] {
-        color: #000000 !important;
-        background-color: #ffffff !important;
-        border-color: #cccccc !important;
-    }
-    [data-testid="stDataFrame"] th {
-        background-color: #f0f0f0 !important;
-        font-weight: bold !important;
-    }
-    /* Pour les cellules éditables */
-    [data-testid="stDataFrame"] input,
-    [data-testid="stDataFrame"] textarea {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        border: 1px solid #cccccc !important;
-    }
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -1368,18 +1296,18 @@ elif menu == "🔐 Administration":
                 d2 = c2.date_input("Fin", date.today() + timedelta(days=7), format="DD/MM/YYYY", key="gen_d2")
                 
                 # Gestion des jours avec cases à cocher
-                st.markdown("**Jours de la semaine (cliquez sur les jours souhaités)**")
+                st.markdown("**Jours de la semaine (cochez ceux souhaités)**")
+                cols_jours = st.columns(5)
                 jours_options = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
-                if "jours_pills" not in st.session_state:
-                    st.session_state.jours_pills = []   # Aucun jour sélectionné par défaut
-                jours = st.pills(
-                    label="",
-                    options=jours_options,
-                    selection_mode="multi",
-                    default=st.session_state.jours_pills,
-                    key="jours_pills_widget"
-                )
-                st.session_state.jours_pills = jours
+                jours_selected = []
+                for idx, jour in enumerate(jours_options):
+                    with cols_jours[idx]:
+                        if f"chk_{jour}" not in st.session_state:
+                            st.session_state[f"chk_{jour}"] = (jour in ["Lundi", "Jeudi"])
+                        checked = st.checkbox(jour, key=f"chk_{jour}", value=st.session_state[f"chk_{jour}"])
+                        if checked:
+                            jours_selected.append(jour)
+                jours = jours_selected
                 
                 if st.button("📊 Générer les lignes"):
                     tmp = []
