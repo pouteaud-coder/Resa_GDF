@@ -532,7 +532,7 @@ def export_to_pdf(title, data_list):
     else:
         for line in data_list:
             pdf.multi_cell(0, 10, txt=normaliser_pdf_text(line))
-    return pdf.output(dest='S')
+    return pdf.output(dest='S').encode('latin-1')
 
 def export_stats_pdf(title, data_list, date_debut, date_fin):
     pdf = FPDF()
@@ -550,7 +550,7 @@ def export_stats_pdf(title, data_list, date_debut, date_fin):
     else:
         for line in data_list:
             pdf.multi_cell(0, 10, txt=normaliser_pdf_text(line))
-    return pdf.output(dest='S')
+    return pdf.output(dest='S').encode('latin-1')
 
 def export_suivi_am_pdf(title, data_triee):
     pdf = FPDF()
@@ -561,7 +561,7 @@ def export_suivi_am_pdf(title, data_triee):
     if not data_triee:
         pdf.set_font("Arial", size=11)
         pdf.cell(0, 10, normaliser_pdf_text("Aucune inscription trouvee."), ln=True)
-        return pdf.output(dest='S')
+        return pdf.output(dest='S').encode('latin-1')
     curr_am = ""
     for i in data_triee:
         nom_am = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
@@ -584,7 +584,7 @@ def export_suivi_am_pdf(title, data_triee):
         pdf.set_font("Arial", size=10)
         detail = f"     {titre_at}  |  {lieu}  |  {horaire}  |  {nb_enf} enfant(s)"
         pdf.cell(0, 6, normaliser_pdf_text(detail), ln=True)
-    return pdf.output(dest='S')
+    return pdf.output(dest='S').encode('latin-1')
 
 def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateurs_dict=None):
     pdf = FPDF()
@@ -595,7 +595,7 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
         pdf.cell(0, 10, normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
-        return pdf.output(dest='S')
+        return pdf.output(dest='S').encode('latin-1')
     for a in ateliers_data:
         ins_at = get_inscrits_fn(a['id'])
         t_ad = len(ins_at)
@@ -629,7 +629,7 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
             ligne = f"       • {nom_p}  ({p['nb_enfants']} enfant(s))"
             pdf.cell(0, 6, normaliser_pdf_text(ligne), ln=True)
         pdf.ln(3)
-    return pdf.output(dest='S')
+    return pdf.output(dest='S').encode('latin-1')
 
 def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_fn, date_debut, date_fin, animateurs_dict=None):
     pdf = FPDF()
@@ -644,7 +644,7 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
         pdf.cell(0, 10, normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
-        return pdf.output(dest='S')
+        return pdf.output(dest='S').encode('latin-1')
     for a in ateliers_data:
         ins_at = get_inscrits_fn(a['id'])
         t_ad = len(ins_at)
@@ -678,7 +678,7 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_
             ligne = f"       • {nom_p}  ({p['nb_enfants']} enfant(s))"
             pdf.cell(0, 6, normaliser_pdf_text(ligne), ln=True)
         pdf.ln(3)
-    return pdf.output(dest='S')
+    return pdf.output(dest='S').encode('latin-1')
 
 # --- WIDGET FILTRE VERT MENTHE ---
 def filtre_vert_menthe(label_key, options=("Tous", "Actifs", "Inactifs"), default="Tous"):
