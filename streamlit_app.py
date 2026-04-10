@@ -156,7 +156,17 @@ st.markdown("""
     .stMultiSelect [data-baseweb="select"] {
         min-width: 160px !important;
     }
-
+    /* Forcer l'affichage permanent des cases à cocher */
+    .stCheckbox input {
+        opacity: 1 !important;
+        visibility: visible !important;
+        margin-right: 8px !important;
+    }
+    .stCheckbox label {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1302,8 +1312,9 @@ elif menu == "🔐 Administration":
                 jours_selected = []
                 for idx, jour in enumerate(jours_options):
                     with cols_jours[idx]:
+                        # Initialisation à False (non coché) pour chaque jour
                         if f"chk_{jour}" not in st.session_state:
-                            st.session_state[f"chk_{jour}"] = (jour in ["Lundi", "Jeudi"])
+                            st.session_state[f"chk_{jour}"] = False
                         checked = st.checkbox(jour, key=f"chk_{jour}", value=st.session_state[f"chk_{jour}"])
                         if checked:
                             jours_selected.append(jour)
