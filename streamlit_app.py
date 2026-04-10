@@ -176,24 +176,25 @@ st.markdown("""
         color: #1b5e20 !important;
         visibility: visible !important;
     }
-    /* Supprimer les bordures rouges sur les cases à cocher */
-    div[data-testid="stCheckbox"] input {
+    /* SUPPRESSION TOTALE DES BORDURES ROUGES SUR LES CASES À COCHER */
+    div[data-testid="stCheckbox"] input,
+    div[data-testid="stCheckbox"] input:focus,
+    div[data-testid="stCheckbox"] input:active,
+    div[data-testid="stCheckbox"] input:invalid,
+    div[data-testid="stCheckbox"] input:user-invalid {
         outline: none !important;
         box-shadow: none !important;
         border: 1px solid #ccc !important;
     }
-    div[data-testid="stCheckbox"] input:focus {
-        outline: none !important;
+    
+    /* Désactiver les styles de validation Streamlit (bordures rouges) sur tous les champs */
+    input:invalid, textarea:invalid, select:invalid {
         box-shadow: none !important;
-        border: 1px solid #1b5e20 !important;
+        border-color: #ccc !important;
     }
-    /* Désactiver les styles de validation Streamlit */
-    .stException,
-    .stAlert div[data-baseweb="notification"] {
-        display: none !important;
-    }
-    /* Ou plus spécifiquement pour les cases à cocher */
-    [data-testid="stCheckbox"] [data-testid="stAlert"] {
+    
+    /* Supprimer les messages d'erreur flottants éventuels */
+    .stAlert, .stException, [data-testid="stAlert"] {
         display: none !important;
     }
         
