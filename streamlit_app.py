@@ -322,6 +322,30 @@ def get_max_enfants_atelier(at, default_max):
         return int(val)
     return default_max
 
+def normaliser_pdf_text(texte):
+    """Remplace les caractères accentués par des non accentués pour le PDF."""
+    if not isinstance(texte, str):
+        texte = str(texte)
+    mapping = {
+        'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+        'à': 'a', 'â': 'a', 'ä': 'a',
+        'î': 'i', 'ï': 'i',
+        'ô': 'o', 'ö': 'o',
+        'ù': 'u', 'û': 'u', 'ü': 'u',
+        'ç': 'c',
+        'œ': 'oe', 'æ': 'ae',
+        'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
+        'À': 'A', 'Â': 'A', 'Ä': 'A',
+        'Î': 'I', 'Ï': 'I',
+        'Ô': 'O', 'Ö': 'O',
+        'Ù': 'U', 'Û': 'U', 'Ü': 'U',
+        'Ç': 'C',
+        'Œ': 'OE', 'Æ': 'AE'
+    }
+    for acc, rem in mapping.items():
+        texte = texte.replace(acc, rem)
+    return texte
+
 def heure_paris_fr():
     jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
     mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
@@ -501,39 +525,39 @@ def export_to_pdf(title, data_list):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
     pdf.ln(10)
     pdf.set_font("Arial", size=11)
     if not data_list:
         pdf.multi_cell(0, 10, txt="Aucune donnée à exporter.")
     else:
         for line in data_list:
-            pdf.multi_cell(0, 10, txt=line.encode('latin-1', 'replace').decode('latin-1'))
+            pdf.multi_cell(0, 10, txt=normaliser_pdf_text(line))
     return pdf.output(dest='S').encode('latin-1')
 
 def export_stats_pdf(title, data_list, date_debut, date_fin):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
     pdf.ln(4)
     pdf.set_font("Arial", 'I', 11)
     periode_str = f"Période : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
-    pdf.cell(0, 8, periode_str.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.cell(0, 8, normaliser_pdf_text(periode_str), ln=True, align='C')
     pdf.ln(8)
     pdf.set_font("Arial", size=11)
     if not data_list:
         pdf.multi_cell(0, 10, txt="Aucune donnée à exporter.")
     else:
         for line in data_list:
-            pdf.multi_cell(0, 10, txt=line.encode('latin-1', 'replace').decode('latin-1'))
+            pdf.multi_cell(0, 10, txt=normaliser_pdf_text(line))
     return pdf.output(dest='S').encode('latin-1')
 
 def export_suivi_am_pdf(title, data_triee):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
     pdf.ln(6)
     if not data_triee:
         pdf.set_font("Arial", size=11)
@@ -553,21 +577,21 @@ def export_suivi_am_pdf(title, data_triee):
             pdf.set_fill_color(27, 94, 32)
             pdf.set_text_color(255, 255, 255)
             pdf.set_font("Arial", 'B', 12)
-            pdf.cell(0, 9, f"  {nom_am}".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+            pdf.cell(0, 9, normaliser_pdf_text(f"  {nom_am}"), ln=True, fill=True)
             pdf.set_text_color(0, 0, 0)
             curr_am = nom_am
         pdf.set_font("Arial", 'B', 10)
-        pdf.cell(0, 6, f"  {date_fr}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.cell(0, 6, normaliser_pdf_text(f"  {date_fr}"), ln=True)
         pdf.set_font("Arial", size=10)
         detail = f"     {titre_at}  |  {lieu}  |  {horaire}  |  {nb_enf} enfant(s)"
-        pdf.cell(0, 6, detail.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.cell(0, 6, normaliser_pdf_text(detail), ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
 def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateurs_dict=None):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
     pdf.ln(6)
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
@@ -587,10 +611,10 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", 'B', 11)
         entete = f"  {date_fr} | {titre_at} | {lieu}{verrou}"
-        pdf.cell(0, 8, entete.encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.cell(0, 8, normaliser_pdf_text(entete), ln=True, fill=True)
         pdf.set_font("Arial", size=10)
         sous = f"     Horaire : {horaire}  |  AM : {t_ad}  |  Enfants : {t_en}  |  Places restantes : {restantes}"
-        pdf.cell(0, 6, sous.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.cell(0, 6, normaliser_pdf_text(sous), ln=True)
         anim_id = a.get('animateur_id')
         anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id), None) if anim_id else None
         autres = [p for p in ins_at if p['adherent_id'] != anim_id]
@@ -599,12 +623,12 @@ def export_planning_ateliers_pdf(title, ateliers_data, get_inscrits_fn, animateu
             nom_p = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
             ligne = f"       ★ {nom_p}  ({anim_ins['nb_enfants']} enfant(s)) [ANIMATEUR]"
             pdf.set_font("Arial", 'B', 10)
-            pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            pdf.cell(0, 6, normaliser_pdf_text(ligne), ln=True)
             pdf.set_font("Arial", size=10)
         for p in autres_tries:
             nom_p = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
             ligne = f"       • {nom_p}  ({p['nb_enfants']} enfant(s))"
-            pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            pdf.cell(0, 6, normaliser_pdf_text(ligne), ln=True)
         pdf.ln(3)
     return pdf.output(dest='S').encode('latin-1')
 
@@ -612,11 +636,11 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
     pdf.ln(2)
     pdf.set_font("Arial", 'I', 11)
     periode_str = f"Période : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
-    pdf.cell(0, 8, periode_str.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+    pdf.cell(0, 8, normaliser_pdf_text(periode_str), ln=True, align='C')
     pdf.ln(4)
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
@@ -636,10 +660,10 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", 'B', 11)
         entete = f"  {date_fr} | {titre_at} | {lieu}{verrou}"
-        pdf.cell(0, 8, entete.encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.cell(0, 8, normaliser_pdf_text(entete), ln=True, fill=True)
         pdf.set_font("Arial", size=10)
         sous = f"     Horaire : {horaire}  |  AM : {t_ad}  |  Enfants : {t_en}  |  Places restantes : {restantes}"
-        pdf.cell(0, 6, sous.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.cell(0, 6, normaliser_pdf_text(sous), ln=True)
         anim_id = a.get('animateur_id')
         anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id), None) if anim_id else None
         autres = [p for p in ins_at if p['adherent_id'] != anim_id]
@@ -648,12 +672,12 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, get_inscrits_
             nom_p = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
             ligne = f"       ★ {nom_p}  ({anim_ins['nb_enfants']} enfant(s)) [ANIMATEUR]"
             pdf.set_font("Arial", 'B', 10)
-            pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            pdf.cell(0, 6, normaliser_pdf_text(ligne), ln=True)
             pdf.set_font("Arial", size=10)
         for p in autres_tries:
             nom_p = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
             ligne = f"       • {nom_p}  ({p['nb_enfants']} enfant(s))"
-            pdf.cell(0, 6, ligne.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            pdf.cell(0, 6, normaliser_pdf_text(ligne), ln=True)
         pdf.ln(3)
     return pdf.output(dest='S').encode('latin-1')
 
