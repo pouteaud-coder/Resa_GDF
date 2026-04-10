@@ -1434,13 +1434,37 @@ elif menu == "🔐 Administration":
                             dialog_attribuer_animateur(a['id'], a['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur="Admin")
                                 
         elif sub == "Actions groupées":
+            # Initialisation de l'état si nécessaire
+            if "bulk_action" not in st.session_state:
+                st.session_state["bulk_action"] = "Activer"
+        
+            st.markdown("**Action à appliquer :**")
+            col_act, col_desact = st.columns(2)
+            with col_act:
+                if st.button(
+                    "✅ Activer",
+                    key="bulk_activer",
+                    use_container_width=True,
+                    type="primary" if st.session_state["bulk_action"] == "Activer" else "secondary"
+                ):
+                    st.session_state["bulk_action"] = "Activer"
+                    st.rerun()
+            with col_desact:
+                if st.button(
+                    "❌ Désactiver",
+                    key="bulk_desactiver",
+                    use_container_width=True,
+                    type="primary" if st.session_state["bulk_action"] == "Désactiver" else "secondary"
+                ):
+                    st.session_state["bulk_action"] = "Désactiver"
+                    st.rerun()
+        
             with st.form("bulk_form"):
                 c1, c2 = st.columns(2)
                 bs = c1.date_input("Début", format="DD/MM/YYYY", key="blk_d1")
                 be = c2.date_input("Fin", format="DD/MM/YYYY", key="blk_d2")
-                action = st.radio("Action :", ["Activer", "Désactiver"], horizontal=True)
                 if st.form_submit_button("🚀 Appliquer"):
-                    supabase.table("ateliers").update({"est_actif": (action=="Activer")}).gte("date_atelier", str(bs)).lte("date_atelier", str(be)).execute()
+                    supabase.table("ateliers").update({"est_actif": (st.session_state["bulk_action"] == "Activer")}).gte("date_atelier", str(bs)).lte("date_atelier", str(be)).execute()
                     st.rerun()
 
     with t2:  # SUIVI AM (Admin)
