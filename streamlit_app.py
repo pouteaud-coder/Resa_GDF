@@ -87,6 +87,20 @@ st.markdown("""
         color: #1b5e20 !important;
         transition: all 0.2s;
     }
+        /* Style pour les boutons d'action groupée */
+    [data-testid="column"] .stButton button[kind="primary"] {
+        background-color: transparent !important;
+        border: 2px solid #80cbc4 !important;
+        color: #1b5e20 !important;
+        font-weight: bold;
+    }
+    [data-testid="column"] .stButton button[kind="secondary"] {
+        background-color: transparent !important;
+        border: 1.5px solid #80cbc4 !important;
+        color: #1b5e20 !important;
+    }
+           
+    
     div[data-testid="column"] .stButton button[kind="primary"] {
         background-color: #a8e6cf !important;
         color: #1b5e20 !important;
