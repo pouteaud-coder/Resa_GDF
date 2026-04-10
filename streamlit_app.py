@@ -154,6 +154,14 @@ def set_max_enfants(valeur):
     except Exception as e:
         return str(e)
 
+def get_current_code():
+    """Récupère le code secret admin actuel en base de données."""
+    try:
+        res = supabase.table("configuration").select("secret_code").eq("id", "main_config").execute()
+        return res.data[0]['secret_code'] if res.data else "1234"
+    except:
+        return "1234"
+
 def get_max_enfants_atelier(at, default_max):
     val = at.get('max_enfants')
     if val is not None:
@@ -510,11 +518,11 @@ def filtre_vert_menthe(label_key, options=("Tous", "Actifs", "Inactifs"), defaul
 
 # --- DIALOGUES ---
 @st.dialog("⚠️ Confirmation")
-def secure_delete_dialog(table, item_id, label, current_code):
+def secure_delete_dialog(table, item_id, label):   # plus de paramètre current_code
     st.write(f"Voulez-vous vraiment désactiver/supprimer : **{label}** ?")
     pw = st.text_input("Code secret admin", type="password")
     if st.button("Confirmer", type="primary"):
-        if pw == current_code or pw == "0000":
+        if pw == get_current_code() or pw == "0000":
             supabase.table(table).update({"est_actif": False}).eq("id", item_id).execute()
             st.success("Opération réussie"); st.rerun()
         else: st.error("Code incorrect")
@@ -529,11 +537,11 @@ def edit_am_dialog(am_id, nom_actuel, prenom_actuel):
             st.success("Modifié !"); st.rerun()
 
 @st.dialog("⚠️ Suppression Atelier")
-def delete_atelier_dialog(at_id, titre, a_des_inscrits, current_code):
+def delete_atelier_dialog(at_id, titre, a_des_inscrits):
     st.warning(f"Voulez-vous supprimer l'atelier : **{titre}** ?")
     pw = st.text_input("Code secret admin", type="password")
     if st.button("Confirmer la suppression définitive"):
-        if pw == current_code or pw == "0000":
+        if pw == get_current_code() or pw == "0000":
             if a_des_inscrits: supabase.table("inscriptions").delete().eq("atelier_id", at_id).execute()
             supabase.table("ateliers").delete().eq("id", at_id).execute()
             st.rerun()
@@ -1417,7 +1425,7 @@ elif menu == "🔐 Administration":
                             cnt = supabase.table("inscriptions").select("id", count="exact").eq("atelier_id", a['id']).execute().count or 0
                         except:
                             cnt = 0
-                        delete_atelier_dialog(a['id'], a['titre'], cnt > 0, current_code)
+                        delete_atelier_dialog(a['id'], a['titre'], cnt > 0)
                     if anim_nom_rep:
                         if cf_anim.button("⭐ Changer anim.", key=f"at_anim_chg_{a['id']}"):
                             dialog_attribuer_animateur(a['id'], a['titre'], anim_id_at, anim_nom_rep, liste_adh_anim, dict_adh_anim, auteur="Admin")
@@ -1857,7 +1865,7 @@ elif menu == "🔐 Administration":
                 if c_edit.button("✏️", key=f"am_edit_{u['id']}", help="Modifier le nom/prénom"):
                     edit_am_dialog(u['id'], u['nom'], u['prenom'])
                 if c_del.button("🗑️", key=f"am_del_{u['id']}"):
-                    secure_delete_dialog("adherents", u['id'], f"{u['prenom']} {u['nom']}", current_code)
+                    secure_delete_dialog("adherents", u['id'], f"{u['prenom']} {u['nom']}")
 
     with t6:  # 📍 LIEUX / HORAIRES
         refresh_referentials()
@@ -1933,7 +1941,7 @@ elif menu == "🔐 Administration":
         with st.form("sec_form"):
             o, n = st.text_input("Ancien code", type="password"), st.text_input("Nouveau code", type="password")
             if st.form_submit_button("Changer le code"):
-                if o == current_code or o == "0000":
+                if o == current_code() or o == "0000":
                     try:
                         supabase.table("configuration").update({"secret_code": n}).eq("id", "main_config").execute()
                         st.success("Code modifié avec succès !")
