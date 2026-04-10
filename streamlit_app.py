@@ -1387,8 +1387,13 @@ elif menu == "🔐 Administration":
                     else:
                         statut_enfants = f"👶 {a['places_enfants_restantes']} pl. enfants"
                     
-                    # Optionnel : vérifier si la capacité totale est dépassée (pour affichage)
-                    total_occ = sum([1 + i['nb_enfants'] for i in inscriptions]) if 'inscriptions' in locals() else 0
+                    # Vérifier la capacité totale (salle saturée)
+                    try:
+                        ins_data = supabase.table("inscriptions").select("nb_enfants").eq("atelier_id", a['id']).execute()
+                        inscriptions_list = ins_data.data if ins_data.data else []
+                    except:
+                        inscriptions_list = []
+                    total_occ = sum([1 + i['nb_enfants'] for i in inscriptions_list])
                     capacite_depassee = total_occ > a['capacite_max']
                     if capacite_depassee:
                         statut_enfants += " ⚠️ Salle saturée"
