@@ -154,11 +154,11 @@ def set_max_enfants(valeur):
     except Exception as e:
         return str(e)
 
-def get_max_enfants_atelier(at):
+def get_max_enfants_atelier(at, default_max):
     val = at.get('max_enfants')
     if val is not None:
         return int(val)
-    return MAX_ENFANTS
+    return default_max
 
 def heure_paris_fr():
     jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -808,7 +808,7 @@ if menu == "🎯 Animateur":
                 ins_data = []
 
             total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
-            max_enf_at = get_max_enfants_atelier(at)
+            max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
             total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])
             places_enfants_restantes = max(max_enf_at - total_enfants_actuel, 0)
 
@@ -937,7 +937,7 @@ elif menu == "📝 Inscriptions":
                         ins_data = []
 
                     anim_id_at = at.get('animateur_id')
-                    max_enf_at = get_max_enfants_atelier(at)
+                    max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
                     capacite_max = at['capacite_max']
                     
                     # Calculs
@@ -1136,7 +1136,7 @@ elif menu == "📊 Suivi & Récap":
                 restantes = a['capacite_max'] - (t_ad + t_en)
                 
                 # --- Calcul des places enfants restantes ---
-                max_enf_at = get_max_enfants_atelier(a)
+                max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
                 nb_enfants_inscrits = t_en
                 places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                 if places_enfants_restantes == 0:
@@ -1355,7 +1355,7 @@ elif menu == "🔐 Administration":
                 except:
                     inscriptions = []
                 nb_enfants_inscrits = sum([i['nb_enfants'] for i in inscriptions])
-                max_enf_at = get_max_enfants_atelier(a)
+                max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
                 places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                 a['places_enfants_restantes'] = places_enfants_restantes
                 a['nb_enfants_inscrits'] = nb_enfants_inscrits
@@ -1557,7 +1557,7 @@ elif menu == "🔐 Administration":
                 restantes = a['capacite_max'] - (t_ad + t_en)  # places totales restantes (peut être négatif)
                 
                 # --- Calcul des places enfants restantes ---
-                max_enf_at = get_max_enfants_atelier(a)
+                max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
                 nb_enfants_inscrits = t_en  # total enfants déjà inscrits (inclut animateur)
                 places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
                 if places_enfants_restantes == 0:
@@ -2033,7 +2033,7 @@ elif menu == "🔐 Administration":
                     ins_data = []
 
                 total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
-                max_enf_at = get_max_enfants_atelier(at)
+                max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
                 total_enfants_actuel = sum([i['nb_enfants'] for i in ins_data])
                 places_enfants_restantes = max(max_enf_at - total_enfants_actuel, 0)
 
