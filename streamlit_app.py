@@ -582,7 +582,8 @@ def edit_am_dialog(am_id, nom_actuel, prenom_actuel):
 
 @st.dialog("⚠️ Suppression Atelier")
 def delete_atelier_dialog(at_id, titre, a_des_inscrits):
-    st.warning(f"Voulez-vous supprimer l'atelier : **{titre}** ?")
+    titre_aff = titre if titre else "(sans titre)"
+    st.warning(f"Voulez-vous supprimer l'atelier : **{titre_aff}** ?")
     pw = st.text_input("Code secret admin", type="password")
     if st.button("Confirmer la suppression définitive"):
         if pw == get_current_code() or pw == "0000":
@@ -674,7 +675,8 @@ def edit_atelier_dialog(at_id, titre_actuel, date_actuelle, lieu_id_actuel, hora
 
 @st.dialog("🎯 Attribuer / Changer l'animateur")
 def dialog_attribuer_animateur(at_id, titre_at, ancien_anim_id, ancien_anim_nom, liste_adh_anim, dict_adh_anim, auteur="Animateur"):
-    st.markdown(f"**Atelier :** {titre_at}")
+    titre_aff = titre_at if titre_at else "(sans titre)"
+    st.markdown(f"**Atelier :** {titre_aff}")
     if ancien_anim_nom:
         st.info(f"Animateur actuel : **{ancien_anim_nom}**")
     else:
@@ -848,8 +850,9 @@ if menu == "🎯 Animateur":
                     # On accepte une chaîne vide ; on la convertit en None pour la base
                     titre_a_stocker = nouveau_titre.strip() if nouveau_titre and nouveau_titre.strip() else None
                     supabase.table("ateliers").update({"titre": titre_a_stocker}).eq("id", at['id']).execute()
+                    ancien_titre_log = at['titre'] if at['titre'] else "(sans titre)"
                     enregistrer_log(user_connecte, "Modification titre atelier", 
-                                    f"Titre modifié de '{at['titre']}' → '{titre_a_stocker or ''}' pour l'atelier du {at['date_atelier']}")
+                                    f"Titre modifié de '{ancien_titre_log}' → '{titre_a_stocker or ''}' pour l'atelier du {at['date_atelier']}")
                     invalider_cache_inscriptions()
                     st.success("Titre mis à jour !")
                     st.rerun()
@@ -1059,7 +1062,7 @@ elif menu == "📊 Suivi & Récap":
 
             df_export = pd.DataFrame([{
                 "Assistante Maternelle": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
-                "Date": i['ateliers']['date_atelier'], "Atelier": i['ateliers']['titre'] else "",
+                "Date": i['ateliers']['date_atelier'], "Atelier": i['ateliers']['titre'] if i['ateliers']['titre'] else "",
                 "Lieu": i['ateliers']['lieu_nom'], "Horaire": i['ateliers']['horaire_lib'],
                 "Nb Enfants": i['nb_enfants']
             } for i in data_triee]) if data_triee else pd.DataFrame(columns=["Assistante Maternelle", "Date", "Atelier", "Lieu", "Horaire", "Nb Enfants"])
@@ -1097,7 +1100,7 @@ elif menu == "📊 Suivi & Récap":
         for a in ateliers:
             for p in cache_ins.get(a['id'], []):
                 all_ins_data.append({
-                    "Date": a['date_atelier'], "Atelier": a['titre'] if i['ateliers']['titre'] else "", "Lieu": a['lieu_nom'],
+                    "Date": a['date_atelier'], "Atelier": a['titre'] if a['ateliers']['titre'] else "", "Lieu": a['lieu_nom'],
                     "Horaire": a['horaire_lib'],
                     "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
                 })
@@ -1335,7 +1338,8 @@ elif menu == "🔐 Administration":
                     if cc.button("🔓 Déverrouiller" if is_verrouille(a) else "🔒 Verrouiller", key=f"at_verr_{a['id']}"):
                         nouvel_etat = not is_verrouille(a)
                         supabase.table("ateliers").update({"est_verrouille": bool(nouvel_etat)}).eq("id", a['id']).execute()
-                        enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{a['titre']}' {'verrouillé' if nouvel_etat else 'déverrouillé'}")
+                        titre_log = a['titre'] if a['titre'] else "(sans titre)"
+                        enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{titre_log}' {'verrouillé' if nouvel_etat else 'déverrouillé'}")
                         invalider_cache_inscriptions(); st.rerun()
                     if cd.button("✏️", key=f"at_edit_{a['id']}"):
                         edit_atelier_dialog(a['id'], a['titre'], a['date_atelier'], a['lieu_id'], a['horaire_id'], a['capacite_max'], a.get('max_enfants'), l_raw, h_raw, map_l_id, map_h_id)
@@ -1443,7 +1447,7 @@ elif menu == "🔐 Administration":
         for a in ateliers:
             for p in cache_ins_adm.get(a['id'], []):
                 adm_ins_list.append({
-                    "Date": a['date_atelier'], "Atelier": a['titre'], "Lieu": a['lieu_nom'],
+                    "Date": a['date_atelier'], "Atelier": a['titre'] if a['titre'] else "", "Lieu": a['lieu_nom'],
                     "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
                 })
 
