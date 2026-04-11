@@ -1003,21 +1003,23 @@ elif menu == "📝 Inscriptions":
                         ins_data = []
 
                     anim_id_at = at.get('animateur_id')
-                    total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
-                    restantes = at['capacite_max'] - total_occ
-                    statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
+                    # Calcul des places enfants restantes
+                    max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
+                    total_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])
+                    places_enfants_restantes = max(max_enf_at - total_enfants_inscrits, 0)
+                    statut_enfants = "🚫 Complet" if places_enfants_restantes == 0 else f"👶 {places_enfants_restantes} pl. enfants"
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                     
-                    # --- Date avec émoji coloré selon le jour ---
+                    # --- Date avec émoji coloré ---
                     emoji = get_weekday_emoji(at['date_atelier'])
                     titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
                     
-                    # Vérifier si l'utilisateur courant est inscrit à cet atelier
+                    # Indicateur si l'utilisateur principal est déjà inscrit
                     id_user_principal = dict_adh.get(user_principal)
                     est_inscrit = any(i['adherent_id'] == id_user_principal for i in ins_data) if id_user_principal else False
                     indicateur_inscrit = " ✔️" if est_inscrit else ""
                     
-                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}{indicateur_inscrit}"
+                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{indicateur_inscrit}"
                     
                     with st.expander(titre_label):
                         if is_verrouille(at):
@@ -1065,20 +1067,30 @@ elif menu == "📝 Inscriptions":
                                 if qui != "Choisir...":
                                     id_adh = dict_adh[qui]
                                     existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
+                                    # Calcul des nouvelles valeurs
+                                    total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
                                     if existing:
-                                        if restantes - (nb_e - existing['nb_enfants']) < 0:
-                                            st.error("Manque de places")
-                                        else:
+                                        delta_enf = nb_e - existing['nb_enfants']
+                                        nouveau_total_enf = total_enfants_inscrits + delta_enf
+                                        nouvelle_occupation = total_occ + delta_enf
+                                    else:
+                                        nouveau_total_enf = total_enfants_inscrits + nb_e
+                                        nouvelle_occupation = total_occ + 1 + nb_e
+                                    
+                                    # Vérifications
+                                    if nouvelle_occupation > at['capacite_max']:
+                                        st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
+                                    elif nouveau_total_enf > max_enf_at:
+                                        st.markdown(f"<span style='color:red; font-weight:bold;'>🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.</span>", unsafe_allow_html=True)
+                                    else:
+                                        if existing:
                                             supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
                                             enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
-                                            st.rerun()
-                                    else:
-                                        if restantes - (1 + nb_e) < 0:
-                                            st.error("Manque de places")
                                         else:
                                             supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
                                             enregistrer_log(user_principal, "Inscription", f"{qui} s'inscrit (+{nb_e} enf.) - {at_info_log}")
-                                            st.rerun()
+                                        invalider_cache_inscriptions()
+                                        st.rerun()
                                             
 # ==========================================
 # SECTION 📊 SUIVI & RÉCAP
