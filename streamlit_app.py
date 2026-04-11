@@ -840,6 +840,19 @@ if menu == "🎯 Animateur":
 
             with st.expander(titre_label, expanded=False):
                 at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
+                # --- Modification du titre de l'atelier par tout animateur ---
+                st.markdown("**✏️ Modifier le titre de l'atelier**")
+                nouveau_titre = st.text_input("Nouveau titre", value=at['titre'], key=f"titre_{at['id']}")
+                if st.button("📝 Mettre à jour le titre", key=f"update_titre_{at['id']}"):
+                    if nouveau_titre.strip():
+                        supabase.table("ateliers").update({"titre": nouveau_titre.strip()}).eq("id", at['id']).execute()
+                        enregistrer_log(user_connecte, "Modification titre atelier", f"Titre modifié de '{at['titre']}' → '{nouveau_titre.strip()}' pour l'atelier du {at['date_atelier']}")
+                        invalider_cache_inscriptions()
+                        st.success("Titre modifié !")
+                        st.rerun()
+                    else:
+                        st.warning("Le titre ne peut pas être vide.")
+
                 st.markdown("**Gestion de l'animateur :**")
 
                 options_anim = ["Choisir..."] + liste_adh_anim
