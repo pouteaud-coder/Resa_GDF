@@ -119,21 +119,19 @@ def get_color(nom_lieu):
     hue = int(hash_object.hexdigest()[:8], 16) % len(colors)
     return colors[hue]
 
-def get_color_for_weekday(date_obj):
-    """Retourne une couleur CSS différente selon le jour de la semaine (lundi=0 -> dimanche=6)"""
-    if isinstance(date_obj, str):
-        date_obj = datetime.strptime(date_obj, '%Y-%m-%d')
-    weekday = date_obj.weekday()  # 0 = lundi, 6 = dimanche
-    colors = {
-        0: "#1E88E5",  # lundi : bleu
-        1: "#43A047",  # mardi : vert
-        2: "#FB8C00",  # mercredi : orange
-        3: "#8E24AA",  # jeudi : violet
-        4: "#FFB300",  # vendredi : ambre
-        5: "#00ACC1",  # samedi : cyan
-        6: "#E53935",  # dimanche : ambre
+def get_weekday_emoji(date_str):
+    """Retourne un émoji de cercle coloré selon le jour de la semaine (0=lundi, 6=dimanche)"""
+    jours_emoji = {
+        0: "🔵",   # lundi
+        1: "🟢",   # mardi
+        2: "🟠",   # mercredi
+        3: "🟣",   # jeudi
+        4: "🔴",   # vendredi
+        5: "🔷",   # samedi
+        6: "🟡",   # dimanche
     }
-    return colors.get(weekday, "#1b5e20")
+    d = datetime.strptime(date_str, '%Y-%m-%d')
+    return jours_emoji.get(d.weekday(), "⚪")
 
 # --- CACHE : données stables (5 minutes) ---
 @st.cache_data(ttl=300)
@@ -934,7 +932,7 @@ if menu == "🎯 Animateur":
 elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
     
-    # --- Initialisation locale des référentiels si absents ---
+    # --- Initialisation locale des référentiels (évite l'erreur refresh_referentials) ---
     if 'lieux_list' not in st.session_state:
         try:
             res_lieux = supabase.table("lieux").select("*").order("nom").execute()
@@ -950,6 +948,20 @@ elif menu == "📝 Inscriptions":
         except:
             st.session_state.horaires_list = []
     
+    # --- Fonction pour l'émoji coloré selon le jour ---
+    def get_weekday_emoji(date_str):
+        jours_emoji = {
+            0: "🔵",   # lundi
+            1: "🟢",   # mardi
+            2: "🟠",   # mercredi
+            3: "🟣",   # jeudi
+            4: "🔴",   # vendredi
+            5: "🔷",   # samedi
+            6: "🟡",   # dimanche
+        }
+        d = datetime.strptime(date_str, '%Y-%m-%d')
+        return jours_emoji.get(d.weekday(), "⚪")
+    
     if not liste_adh:
         st.info("ℹ️ Aucune assistante maternelle enregistrée pour le moment.")
         st.markdown("""
@@ -963,19 +975,23 @@ elif menu == "📝 Inscriptions":
         else:
             idx_user = 0
         user_principal = st.selectbox("👤 Vous êtes :", ["Choisir..."] + liste_adh, index=idx_user)
+        
         if user_principal != "Choisir...":
             today_str = str(date.today())
             try:
                 ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data or []
             except:
                 ateliers_bruts = []
+            
             lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
             horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+            
             ateliers = []
             for at in ateliers_bruts:
                 at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
                 at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
                 ateliers.append(at)
+            
             if not ateliers:
                 st.info("ℹ️ Aucun atelier à venir. Consultez l'Administration → 🏗️ Ateliers pour en créer.")
             else:
@@ -991,19 +1007,16 @@ elif menu == "📝 Inscriptions":
                     restantes = at['capacite_max'] - total_occ
                     statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
-
-                    # ----- DATE COLORÉE SELON LE JOUR DE LA SEMAINE -----
-                    date_obj = at['date_atelier']
-                    date_text_long = format_date_fr_complete(date_obj, gras=False)
-                    color = get_color_for_weekday(date_obj)
-                    titre_sans_date = f"{at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
-
-                    with st.expander(titre_sans_date):
-                        st.markdown(f'<div style="font-size:1.3rem; font-weight:bold; color:{color};">{date_text_long}</div>', unsafe_allow_html=True)
-
+                    
+                    # --- Date avec émoji coloré selon le jour ---
+                    emoji = get_weekday_emoji(at['date_atelier'])
+                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
+                    
+                    with st.expander(titre_label):
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
 
+                        # Affichage des inscrits avec animateur en orange en premier
                         if ins_data:
                             anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
                             autres_ins = [i for i in ins_data if i['adherent_id'] != anim_id_at]
@@ -1030,8 +1043,10 @@ elif menu == "📝 Inscriptions":
 
                         if not is_verrouille(at):
                             st.markdown("---")
-                            try: idx_def = (liste_adh.index(user_principal) + 1)
-                            except: idx_def = 0
+                            try:
+                                idx_def = (liste_adh.index(user_principal) + 1)
+                            except:
+                                idx_def = 0
                             c1, c2, c3 = st.columns([2, 1, 1])
                             qui = c1.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
                             nb_e = c2.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
