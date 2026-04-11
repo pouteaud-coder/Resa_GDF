@@ -443,7 +443,7 @@ def export_suivi_am_pdf(title, data_triee):
         nom_am = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
         at = i['ateliers']
         date_fr = format_date_fr_simple(at['date_atelier'])
-        titre_at = at.get('titre', '')
+        titre_at = at.get('titre') or "(sans titre)"
         lieu = at.get('lieu_nom', '?')
         horaire = at.get('horaire_lib', '?')
         nb_enf = i['nb_enfants']
@@ -478,7 +478,7 @@ def export_planning_ateliers_pdf(title, ateliers_data, cache_ins_dict, animateur
         t_en = sum([p['nb_enfants'] for p in ins_at])
         restantes = a['capacite_max'] - (t_ad + t_en)
         date_fr = format_date_fr_simple(a['date_atelier'])
-        titre_at = a.get('titre', '')
+        titre_at = a.get('titre') or "(sans titre)"
         lieu = a.get('lieu_nom', '?')
         horaire = a.get('horaire_lib', '?')
         verrou = " [VERROUILLE]" if is_verrouille(a) else ""
@@ -520,7 +520,7 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, cache_ins_dic
         t_en = sum([p['nb_enfants'] for p in ins_at])
         restantes = a['capacite_max'] - (t_ad + t_en)
         date_fr = format_date_fr_simple(a['date_atelier'])
-        titre_at = a.get('titre', '')
+        titre_at = a.get('titre') or "(sans titre)"
         lieu = a.get('lieu_nom', '?')
         horaire = a.get('horaire_lib', '?')
         verrou = " [VERROUILLE]" if is_verrouille(a) else ""
@@ -1059,7 +1059,7 @@ elif menu == "📊 Suivi & Récap":
 
             df_export = pd.DataFrame([{
                 "Assistante Maternelle": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
-                "Date": i['ateliers']['date_atelier'], "Atelier": i['ateliers']['titre'],
+                "Date": i['ateliers']['date_atelier'], "Atelier": i['ateliers']['titre'] else "",
                 "Lieu": i['ateliers']['lieu_nom'], "Horaire": i['ateliers']['horaire_lib'],
                 "Nb Enfants": i['nb_enfants']
             } for i in data_triee]) if data_triee else pd.DataFrame(columns=["Assistante Maternelle", "Date", "Atelier", "Lieu", "Horaire", "Nb Enfants"])
@@ -1097,7 +1097,7 @@ elif menu == "📊 Suivi & Récap":
         for a in ateliers:
             for p in cache_ins.get(a['id'], []):
                 all_ins_data.append({
-                    "Date": a['date_atelier'], "Atelier": a['titre'], "Lieu": a['lieu_nom'],
+                    "Date": a['date_atelier'], "Atelier": a['titre'] if i['ateliers']['titre'] else "", "Lieu": a['lieu_nom'],
                     "Horaire": a['horaire_lib'],
                     "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
                 })
@@ -1326,7 +1326,8 @@ elif menu == "🔐 Administration":
                         statut_enfants += " ⚠️ Salle saturée"
 
                     ca, cb, cc, cd, ce, cf_anim = st.columns([0.38, 0.1, 0.1, 0.1, 0.1, 0.22])
-                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {a['titre']} ({a['lieu_nom']}){verrou_icon}{anim_label_rep} | {statut_enfants}")
+                    titre_affiche = a['titre'] if a['titre'] else "(sans titre)"
+                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {titre_affiche} ({a['lieu_nom']}){verrou_icon}{anim_label_rep} | {statut_enfants}")
 
                     if cb.button("🔴 Désactiver" if a['est_actif'] else "🟢 Activer", key=f"at_stat_{a['id']}"):
                         supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute()
@@ -1389,7 +1390,7 @@ elif menu == "🔐 Administration":
 
             df_adm = pd.DataFrame([{
                 "AM": f"{i['adherents']['prenom']} {i['adherents']['nom']}",
-                "Date": i['ateliers']['date_atelier'], "Atelier": i['ateliers']['titre'],
+                "Date": i['ateliers']['date_atelier'], "Atelier": i['ateliers']['titre'] if i['ateliers']['titre'] else "",
                 "Lieu": i['ateliers']['lieu_nom'], "Horaire": i['ateliers']['horaire_lib'],
                 "Enfants": i['nb_enfants']
             } for i in data_adm_triee]) if data_adm_triee else pd.DataFrame(columns=["AM", "Date", "Atelier", "Lieu", "Horaire", "Enfants"])
@@ -1407,7 +1408,8 @@ elif menu == "🔐 Administration":
                         curr = nom
                     at = i['ateliers']
                     c_l = get_color(at['lieu_nom'])
-                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {at['titre']} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
+                    titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
+                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
             else:
                 st.info("Aucune inscription trouvée.")
 
@@ -1473,7 +1475,8 @@ elif menu == "🔐 Administration":
                         anim_nom_plan = f"{anim_adh_plan['prenom']} {anim_adh_plan['nom']}"
                 anim_label_plan = f" | ⭐ {anim_nom_plan}" if anim_nom_plan else ""
 
-                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
+                titre_affiche = a['titre'] if a['titre'] else "(sans titre)"    
+                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {titre_affiche} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
 
                 if ins_at:
                     anim_ins_plan = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
@@ -1888,7 +1891,8 @@ elif menu == "🔐 Administration":
                         anim_nom_at = f"{anim_adh['prenom']} {anim_adh['nom']}"
 
                 anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
-                titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{anim_label}"
+                titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
+                titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{anim_label}"
 
                 with st.expander(titre_label, expanded=False):
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
