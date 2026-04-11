@@ -663,7 +663,7 @@ def edit_atelier_dialog(at_id, titre_actuel, date_actuelle, lieu_id_actuel, hora
             val_a_stocker = nouvelle_limite_enfants if nouvelle_limite_enfants > 0 else None
             supabase.table("ateliers").update({
                 "date_atelier": nouvelle_date.strftime('%Y-%m-%d'),
-                "titre": nouveau_titre, "lieu_id": nouveau_lieu_id,
+                "titre": nouveau_titre if nouveau_titre else None, "lieu_id": nouveau_lieu_id,
                 "horaire_id": nouvel_horaire_id, "capacite_max": nouvelle_capacite,
                 "max_enfants": val_a_stocker
             }).eq("id", at_id).execute()
@@ -836,22 +836,23 @@ if menu == "🎯 Animateur":
                     anim_nom_at = f"{anim_adh['prenom']} {anim_adh['nom']}"
 
             anim_label = f" | ⭐ {anim_nom_at}" if anim_nom_at else " | ⭐ Pas d'animateur"
-            titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{anim_label}"
+            titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
+            titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{anim_label}"
 
             with st.expander(titre_label, expanded=False):
                 at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
                 # --- Modification du titre de l'atelier par tout animateur ---
                 st.markdown("**✏️ Modifier le titre de l'atelier**")
-                nouveau_titre = st.text_input("Nouveau titre", value=at['titre'], key=f"titre_{at['id']}")
+                nouveau_titre = st.text_input("Nouveau titre", value=at['titre'] or "", key=f"titre_{at['id']}")
                 if st.button("📝 Mettre à jour le titre", key=f"update_titre_{at['id']}"):
-                    if nouveau_titre.strip():
-                        supabase.table("ateliers").update({"titre": nouveau_titre.strip()}).eq("id", at['id']).execute()
-                        enregistrer_log(user_connecte, "Modification titre atelier", f"Titre modifié de '{at['titre']}' → '{nouveau_titre.strip()}' pour l'atelier du {at['date_atelier']}")
-                        invalider_cache_inscriptions()
-                        st.success("Titre modifié !")
-                        st.rerun()
-                    else:
-                        st.warning("Le titre ne peut pas être vide.")
+                    # On accepte une chaîne vide ; on la convertit en None pour la base
+                    titre_a_stocker = nouveau_titre.strip() if nouveau_titre and nouveau_titre.strip() else None
+                    supabase.table("ateliers").update({"titre": titre_a_stocker}).eq("id", at['id']).execute()
+                    enregistrer_log(user_connecte, "Modification titre atelier", 
+                                    f"Titre modifié de '{at['titre']}' → '{titre_a_stocker or ''}' pour l'atelier du {at['date_atelier']}")
+                    invalider_cache_inscriptions()
+                    st.success("Titre mis à jour !")
+                    st.rerun()
 
                 st.markdown("**Gestion de l'animateur :**")
 
@@ -948,8 +949,10 @@ elif menu == "📝 Inscriptions":
 
                     statut_enfants = "🚫 Complet" if places_enfants_restantes == 0 else f"👶 {places_enfants_restantes} pl. enfants"
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
-                    titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}"
-
+                    titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
+                    titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
+                    titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}"
+                    
                     with st.expander(titre_label):
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
@@ -1118,7 +1121,7 @@ elif menu == "📊 Suivi & Récap":
                 if restantes < 0:
                     statut_enfants += " ⚠️ Salle saturée"
 
-                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre']} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
+                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre'] if a['titre'] else '(sans titre)'} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
 
                 if ins_at:
                     anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
@@ -1261,7 +1264,7 @@ elif menu == "🔐 Administration":
                                 st.error(f"Format de date invalide : {r['Date']}"); st.stop()
                             max_enf_val = int(r.get('Max Enfants', MAX_ENFANTS))
                             to_db.append({
-                                "date_atelier": date_iso, "titre": r['Titre'],
+                                "date_atelier": date_iso, "titre": r['Titre'] if r['Titre'] else None,
                                 "lieu_id": map_l_id[lieu_nom], "horaire_id": map_h_id[horaire_lib],
                                 "capacite_max": int(r['Capacité']),
                                 "max_enfants": max_enf_val if max_enf_val > 0 else None,
