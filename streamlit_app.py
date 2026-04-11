@@ -12,7 +12,7 @@ from fpdf import FPDF
 # ==========================================
 # CONFIGURATION ET INITIALISATION
 # ==========================================
-st.set_page_config(page_title="Résa GDF", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="Résa GDF", page_icon="🖼️", layout="wide")
 
 # --- GATEKEEPER : Code d'accès général ---
 def check_access():
@@ -40,7 +40,7 @@ check_access()
 # --- TITRE DE L'APPLICATION ---
 st.markdown("""
     <div style="display: flex; align-items: center; background-color: #e6f4ff; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 1px solid #a8cfe8;">
-        <div style="font-size: 3.5rem; margin-right: 20px;">🎨</div>
+        <div style="font-size: 3.5rem; margin-right: 20px;">🖼️</div>
         <div>
             <h1 style="color: #1b5e20; margin: 0;">Résa GDF</h1>
             <p style="margin: 0; color: #0a3d0a; font-weight: bold;">Ateliers d'éveil & Activités manuelles</p>
