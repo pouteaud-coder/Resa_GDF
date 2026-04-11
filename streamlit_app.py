@@ -1010,7 +1010,8 @@ elif menu == "📝 Inscriptions":
                     
                     # --- Date avec émoji coloré selon le jour ---
                     emoji = get_weekday_emoji(at['date_atelier'])
-                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
+                    titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
+                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
                     
                     with st.expander(titre_label):
                         if is_verrouille(at):
