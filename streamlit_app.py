@@ -1011,7 +1011,13 @@ elif menu == "📝 Inscriptions":
                     # --- Date avec émoji coloré selon le jour ---
                     emoji = get_weekday_emoji(at['date_atelier'])
                     titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
-                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
+                    
+                    # Vérifier si l'utilisateur courant est inscrit à cet atelier
+                    id_user_principal = dict_adh.get(user_principal)
+                    est_inscrit = any(i['adherent_id'] == id_user_principal for i in ins_data) if id_user_principal else False
+                    indicateur_inscrit = " ✔️" if est_inscrit else ""
+                    
+                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}{indicateur_inscrit}"
                     
                     with st.expander(titre_label):
                         if is_verrouille(at):
