@@ -1024,71 +1024,78 @@ elif menu == "📝 Inscriptions":
                     with st.expander(titre_label):
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
-
-                        # Affichage des inscrits avec animateur en orange en premier
-                        if ins_data:
+                        else:
+                            # --- Affichage de l'animateur (lecture seule) ---
                             anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
+                            if anim_ins:
+                                n_a = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
+                                st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+
+                            # --- Affichage des autres inscrits (non animateurs) avec possibilité de modification/désinscription ---
                             autres_ins = [i for i in ins_data if i['adherent_id'] != anim_id_at]
                             autres_tries = sorted(autres_ins, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
 
-                            if anim_ins:
-                                n_a = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
-                                if is_verrouille(at):
-                                    st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
-                                else:
-                                    c_a1, c_a2 = st.columns([0.88, 0.12])
-                                    c_a1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
-                                    c_a2.write("🔒")
+                            total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
 
                             for i in autres_tries:
                                 n_f = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
-                                if is_verrouille(at):
-                                    st.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
-                                else:
-                                    c_nom, c_poub = st.columns([0.88, 0.12])
-                                    c_nom.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
-                                    if c_poub.button("🗑️", key=f"del_{i['id']}"):
-                                        confirm_unsubscribe_dialog(i['id'], n_f, at_info_log, user_principal)
+                                col_nom, col_nb, col_modif, col_del = st.columns([0.4, 0.2, 0.2, 0.2])
+                                col_nom.write(f"• {n_f}")
+                                new_nb = col_nb.number_input("", min_value=1, max_value=10, value=i['nb_enfants'], key=f"modif_nb_{i['id']}", label_visibility="collapsed")
+                                if col_modif.button("✏️ Modifier", key=f"modif_btn_{i['id']}"):
+                                    delta = new_nb - i['nb_enfants']
+                                    nouveau_total_enf = total_enfants_inscrits + delta
+                                    nouvelle_occupation = total_occ + delta
+                                    if nouvelle_occupation > at['capacite_max']:
+                                        st.error("❌ Trop de monde : capacité de la salle dépassée")
+                                    elif nouveau_total_enf > max_enf_at:
+                                        st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé")
+                                    else:
+                                        supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", i['id']).execute()
+                                        enregistrer_log(user_principal, "Modification", f"{n_f} → {new_nb} enfants - {at_info_log}")
+                                        invalider_cache_inscriptions()
+                                        st.rerun()
+                                if col_del.button("🗑️", key=f"del_{i['id']}"):
+                                    confirm_unsubscribe_dialog(i['id'], n_f, at_info_log, user_principal)
 
-                        if not is_verrouille(at):
+                            # --- Formulaire d'inscription pour une nouvelle AM (non animateur) ---
                             st.markdown("---")
                             try:
                                 idx_def = (liste_adh.index(user_principal) + 1)
                             except:
                                 idx_def = 0
                             c1, c2, c3 = st.columns([2, 1, 1])
-                            qui = c1.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
+                            qui = c1.selectbox("Inscrire :", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
                             nb_e = c2.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
 
                             qui_est_anim = (qui != "Choisir..." and dict_adh.get(qui) == anim_id_at)
                             if qui_est_anim:
-                                st.warning("🔒 Cette personne est l'animateur de cet atelier. Son inscription est gérée automatiquement.")
-                            elif c3.button("Valider", key=f"v_{at['id']}", type="primary"):
+                                st.warning("🔒 Cette personne est l'animateur de cet atelier. Pour la modifier, utilisez l'espace 🎯 Animateur.")
+                            elif c3.button("✅ Valider l'inscription", key=f"v_{at['id']}", type="primary"):
                                 if qui != "Choisir...":
                                     id_adh = dict_adh[qui]
                                     existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
                                     # Calcul des nouvelles valeurs
-                                    total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
+                                    total_occ_calc = sum([(1 + (ins['nb_enfants'] if ins['nb_enfants'] else 0)) for ins in ins_data])
                                     if existing:
                                         delta_enf = nb_e - existing['nb_enfants']
                                         nouveau_total_enf = total_enfants_inscrits + delta_enf
-                                        nouvelle_occupation = total_occ + delta_enf
+                                        nouvelle_occupation = total_occ_calc + delta_enf
                                     else:
                                         nouveau_total_enf = total_enfants_inscrits + nb_e
-                                        nouvelle_occupation = total_occ + 1 + nb_e
-                                    
-                                    # Vérifications
+                                        nouvelle_occupation = total_occ_calc + 1 + nb_e
+
                                     if nouvelle_occupation > at['capacite_max']:
-                                        st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
+                                        st.error("❌ Trop de monde : capacité de la salle dépassée")
                                     elif nouveau_total_enf > max_enf_at:
-                                        st.markdown(f"<span style='color:red; font-weight:bold;'>🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.</span>", unsafe_allow_html=True)
+                                        st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé")
                                     else:
                                         if existing:
                                             supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
-                                            enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
+                                            enregistrer_log(user_principal, "Modification", f"{qui} → {nb_e} enfants - {at_info_log}")
                                         else:
                                             supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
-                                            enregistrer_log(user_principal, "Inscription", f"{qui} s'inscrit (+{nb_e} enf.) - {at_info_log}")
+                                            enregistrer_log(user_principal, "Inscription", f"{qui} inscrit (+{nb_e} enf.) - {at_info_log}")
                                         invalider_cache_inscriptions()
                                         st.rerun()
                                             
