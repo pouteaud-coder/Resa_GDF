@@ -1100,9 +1100,12 @@ elif menu == "📊 Suivi & Récap":
         for a in ateliers:
             for p in cache_ins.get(a['id'], []):
                 all_ins_data.append({
-                    "Date": a['date_atelier'], "Atelier": a['titre'] if a['ateliers']['titre'] else "", "Lieu": a['lieu_nom'],
+                    "Date": a['date_atelier'],
+                    "Atelier": a['titre'] if a['titre'] else "",
+                    "Lieu": a['lieu_nom'],
                     "Horaire": a['horaire_lib'],
-                    "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}", "Enfants": p['nb_enfants']
+                    "AM": f"{p['adherents']['prenom']} {p['adherents']['nom']}",
+                    "Enfants": p['nb_enfants']
                 })
 
         df_at_exp = pd.DataFrame(all_ins_data) if all_ins_data else pd.DataFrame(columns=["Date", "Atelier", "Lieu", "Horaire", "AM", "Enfants"])
