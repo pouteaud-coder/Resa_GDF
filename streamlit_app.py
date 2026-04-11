@@ -934,10 +934,21 @@ if menu == "🎯 Animateur":
 elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
     
-    # --- Vérification / initialisation des référentiels ---
-    if 'lieux_list' not in st.session_state or 'horaires_list' not in st.session_state:
-        # Fonction refresh_referentials() est définie plus haut dans le code
-        refresh_referentials()
+    # --- Initialisation locale des référentiels si absents ---
+    if 'lieux_list' not in st.session_state:
+        try:
+            res_lieux = supabase.table("lieux").select("*").order("nom").execute()
+            all_lieux = res_lieux.data or []
+            st.session_state.lieux_list = [l for l in all_lieux if l.get("est_actif", True) is not False]
+        except:
+            st.session_state.lieux_list = []
+    if 'horaires_list' not in st.session_state:
+        try:
+            res_hor = supabase.table("horaires").select("*").execute()
+            all_hor = res_hor.data or []
+            st.session_state.horaires_list = [h for h in all_hor if h.get("est_actif", True) is not False]
+        except:
+            st.session_state.horaires_list = []
     
     if not liste_adh:
         st.info("ℹ️ Aucune assistante maternelle enregistrée pour le moment.")
@@ -958,17 +969,13 @@ elif menu == "📝 Inscriptions":
                 ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data or []
             except:
                 ateliers_bruts = []
-            
-            # Construction des dictionnaires de correspondance à partir des référentiels en session
             lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
             horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
-            
             ateliers = []
             for at in ateliers_bruts:
                 at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
                 at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
                 ateliers.append(at)
-            
             if not ateliers:
                 st.info("ℹ️ Aucun atelier à venir. Consultez l'Administration → 🏗️ Ateliers pour en créer.")
             else:
@@ -992,13 +999,11 @@ elif menu == "📝 Inscriptions":
                     titre_sans_date = f"{at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
 
                     with st.expander(titre_sans_date):
-                        # Affiche la date en couleur en gros
                         st.markdown(f'<div style="font-size:1.3rem; font-weight:bold; color:{color};">{date_text_long}</div>', unsafe_allow_html=True)
 
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
 
-                        # Affichage des inscrits avec animateur en orange en premier
                         if ins_data:
                             anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
                             autres_ins = [i for i in ins_data if i['adherent_id'] != anim_id_at]
@@ -1025,14 +1030,12 @@ elif menu == "📝 Inscriptions":
 
                         if not is_verrouille(at):
                             st.markdown("---")
-                            # Pré-sélection de l'utilisateur courant
                             try: idx_def = (liste_adh.index(user_principal) + 1)
                             except: idx_def = 0
                             c1, c2, c3 = st.columns([2, 1, 1])
                             qui = c1.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
                             nb_e = c2.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
 
-                            # Bloquer si c'est l'animateur
                             qui_est_anim = (qui != "Choisir..." and dict_adh.get(qui) == anim_id_at)
                             if qui_est_anim:
                                 st.warning("🔒 Cette personne est l'animateur de cet atelier. Son inscription est gérée automatiquement.")
