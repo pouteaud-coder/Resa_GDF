@@ -119,6 +119,22 @@ def get_color(nom_lieu):
     hue = int(hash_object.hexdigest()[:8], 16) % len(colors)
     return colors[hue]
 
+def get_color_for_weekday(date_obj):
+    """Retourne une couleur CSS différente selon le jour de la semaine (lundi=0 -> dimanche=6)"""
+    if isinstance(date_obj, str):
+        date_obj = datetime.strptime(date_obj, '%Y-%m-%d')
+    weekday = date_obj.weekday()  # 0 = lundi, 6 = dimanche
+    colors = {
+        0: "#1E88E5",  # lundi : bleu
+        1: "#43A047",  # mardi : vert
+        2: "#FB8C00",  # mercredi : orange
+        3: "#8E24AA",  # jeudi : violet
+        4: "#FFB300",  # vendredi : ambre
+        5: "#00ACC1",  # samedi : cyan
+        6: "#E53935",  # dimanche : ambre
+    }
+    return colors.get(weekday, "#1b5e20")
+
 # --- CACHE : données stables (5 minutes) ---
 @st.cache_data(ttl=300)
 def get_config():
@@ -924,115 +940,110 @@ elif menu == "📝 Inscriptions":
         > 🔐 Administration → 👥 Liste AM → Ajouter une première assistante maternelle.
         """)
     else:
-        idx_user = (liste_adh.index(user_connecte) + 1) if user_connecte != "Choisir..." and user_connecte in liste_adh else 0
+        # Utiliser la sélection de la sidebar si disponible
+        if user_connecte != "Choisir...":
+            idx_user = liste_adh.index(user_connecte) + 1 if user_connecte in liste_adh else 0
+        else:
+            idx_user = 0
         user_principal = st.selectbox("👤 Vous êtes :", ["Choisir..."] + liste_adh, index=idx_user)
-
         if user_principal != "Choisir...":
-            ateliers_bruts = get_ateliers_a_venir()
-            ateliers = enrichir_ateliers([dict(a) for a in ateliers_bruts], lieux_dict_global, horaires_dict_global)
-
+            today_str = str(date.today())
+            try:
+                ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data or []
+            except:
+                ateliers_bruts = []
+            lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
+            horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+            ateliers = []
+            for at in ateliers_bruts:
+                at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
+                at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
+                ateliers.append(at)
             if not ateliers:
                 st.info("ℹ️ Aucun atelier à venir. Consultez l'Administration → 🏗️ Ateliers pour en créer.")
             else:
-                # UNE SEULE requête pour toutes les inscriptions
-                at_ids = tuple(a['id'] for a in ateliers)
-                toutes_ins = get_toutes_inscriptions_ateliers(at_ids)
-                cache_ins = construire_cache_ins(toutes_ins)
-
                 for at in ateliers:
-                    ins_data = cache_ins.get(at['id'], [])
+                    try:
+                        res_ins = supabase.table("inscriptions").select("*, adherents(nom, prenom)").eq("atelier_id", at['id']).execute()
+                        ins_data = res_ins.data if res_ins.data else []
+                    except:
+                        ins_data = []
+
                     anim_id_at = at.get('animateur_id')
-                    max_enf_at = get_max_enfants_atelier(at, MAX_ENFANTS)
-                    capacite_max = at['capacite_max']
-
                     total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
-                    nb_enfants_inscrits = sum([i['nb_enfants'] for i in ins_data])
-                    places_enfants_restantes = max(max_enf_at - nb_enfants_inscrits, 0)
-                    atelier_enfants_complet = (nb_enfants_inscrits >= max_enf_at)
-
-                    statut_enfants = "🚫 Complet" if places_enfants_restantes == 0 else f"👶 {places_enfants_restantes} pl. enfants"
+                    restantes = at['capacite_max'] - total_occ
+                    statut_p = f"✅ {restantes} pl. libres" if restantes > 0 else "🚨 COMPLET"
                     at_info_log = f"{at['date_atelier']} | {at['horaire_lib']} | {at['lieu_nom']}"
-                    titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
-                    titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
-                    titre_label = f"{format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}"
-                    
-                    with st.expander(titre_label):
+
+                    # ----- DATE COLORÉE SELON LE JOUR DE LA SEMAINE -----
+                    date_obj = at['date_atelier']
+                    date_text_long = format_date_fr_complete(date_obj, gras=False)
+                    color = get_color_for_weekday(date_obj)
+                    titre_sans_date = f"{at['titre']} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_p}"
+
+                    with st.expander(titre_sans_date):
+                        # Affiche la date en couleur en gros
+                        st.markdown(f'<div style="font-size:1.3rem; font-weight:bold; color:{color};">{date_text_long}</div>', unsafe_allow_html=True)
+
                         if is_verrouille(at):
                             st.warning("🔒 Cet atelier est géré par l'administration. Les inscriptions et désinscriptions ne sont pas disponibles ici.")
 
+                        # Affichage des inscrits avec animateur en orange en premier
                         if ins_data:
                             anim_ins = next((i for i in ins_data if i['adherent_id'] == anim_id_at), None) if anim_id_at else None
-                            autres_tries = sorted(
-                                [i for i in ins_data if i['adherent_id'] != anim_id_at],
-                                key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper())
-                            )
+                            autres_ins = [i for i in ins_data if i['adherent_id'] != anim_id_at]
+                            autres_tries = sorted(autres_ins, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+
                             if anim_ins:
                                 n_a = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
-                                st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span class="animateur-badge">ANIMATEUR</span></span>', unsafe_allow_html=True)
-
-                            for p in autres_tries:
-                                n_f = f"{p['adherents']['prenom']} {p['adherents']['nom']}"
                                 if is_verrouille(at):
-                                    st.write(f"• {n_f} **({p['nb_enfants']} enf.)**")
+                                    st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
                                 else:
-                                    col_nom, col_nb, col_modif, col_del = st.columns([0.4, 0.2, 0.2, 0.2])
-                                    col_nom.write(f"• {n_f}")
-                                    new_nb = col_nb.number_input("", min_value=1, max_value=10, value=p['nb_enfants'], key=f"nb_{p['id']}", label_visibility="collapsed")
-                                    if col_modif.button("✏️ Modifier", key=f"mod_{p['id']}"):
-                                        delta = new_nb - p['nb_enfants']
-                                        if (nb_enfants_inscrits + delta) > max_enf_at:
-                                            st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
-                                        elif (total_occ + delta) > capacite_max:
-                                            st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
-                                        else:
-                                            supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", p['id']).execute()
-                                            enregistrer_log(user_principal, "Modification", f"{n_f} → {new_nb} enfants - {at_info_log}")
-                                            invalider_cache_inscriptions()
-                                            st.rerun()
-                                    if col_del.button("🗑️", key=f"del_{p['id']}"):
-                                        confirm_unsubscribe_dialog(p['id'], n_f, at_info_log, user_principal)
+                                    c_a1, c_a2 = st.columns([0.88, 0.12])
+                                    c_a1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
+                                    c_a2.write("🔒")
+
+                            for i in autres_tries:
+                                n_f = f"{i['adherents']['prenom']} {i['adherents']['nom']}"
+                                if is_verrouille(at):
+                                    st.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
+                                else:
+                                    c_nom, c_poub = st.columns([0.88, 0.12])
+                                    c_nom.write(f"• {n_f} **({i['nb_enfants']} enf.)**")
+                                    if c_poub.button("🗑️", key=f"del_{i['id']}"):
+                                        confirm_unsubscribe_dialog(i['id'], n_f, at_info_log, user_principal)
 
                         if not is_verrouille(at):
                             st.markdown("---")
-                            try:
-                                idx_def = (liste_adh.index(user_principal) + 1)
-                            except:
-                                idx_def = 0
-                            col_qui, col_nb_e, col_btn = st.columns([2, 1, 1])
-                            qui = col_qui.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
-                            nb_e = col_nb_e.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
+                            # Pré-sélection de l'utilisateur courant
+                            try: idx_def = (liste_adh.index(user_principal) + 1)
+                            except: idx_def = 0
+                            c1, c2, c3 = st.columns([2, 1, 1])
+                            qui = c1.selectbox("Qui ?", ["Choisir..."] + liste_adh, index=idx_def, key=f"q_{at['id']}")
+                            nb_e = c2.number_input("Enfants", 1, 10, 1, key=f"e_{at['id']}")
 
+                            # Bloquer si c'est l'animateur
                             qui_est_anim = (qui != "Choisir..." and dict_adh.get(qui) == anim_id_at)
                             if qui_est_anim:
                                 st.warning("🔒 Cette personne est l'animateur de cet atelier. Son inscription est gérée automatiquement.")
-                            elif atelier_enfants_complet and qui != "Choisir...":
-                                st.warning(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) est atteint pour cet atelier.")
-                            elif col_btn.button("Valider", key=f"v_{at['id']}", type="primary"):
+                            elif c3.button("Valider", key=f"v_{at['id']}", type="primary"):
                                 if qui != "Choisir...":
                                     id_adh = dict_adh[qui]
                                     existing = next((ins for ins in ins_data if ins['adherent_id'] == id_adh), None)
                                     if existing:
-                                        delta_enf = nb_e - existing['nb_enfants']
-                                        if (nb_enfants_inscrits + delta_enf) > max_enf_at:
-                                            st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
-                                        elif (total_occ + delta_enf) > capacite_max:
-                                            st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
+                                        if restantes - (nb_e - existing['nb_enfants']) < 0:
+                                            st.error("Manque de places")
                                         else:
                                             supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
                                             enregistrer_log(user_principal, "Modification", f"{qui} change à {nb_e} enfants - {at_info_log}")
-                                            invalider_cache_inscriptions()
                                             st.rerun()
                                     else:
-                                        if (nb_enfants_inscrits + nb_e) > max_enf_at:
-                                            st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé.")
-                                        elif (total_occ + 1 + nb_e) > capacite_max:
-                                            st.markdown("<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée</span>", unsafe_allow_html=True)
+                                        if restantes - (1 + nb_e) < 0:
+                                            st.error("Manque de places")
                                         else:
                                             supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
                                             enregistrer_log(user_principal, "Inscription", f"{qui} s'inscrit (+{nb_e} enf.) - {at_info_log}")
-                                            invalider_cache_inscriptions()
                                             st.rerun()
-
 
 # ==========================================
 # SECTION 📊 SUIVI & RÉCAP
