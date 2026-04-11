@@ -933,6 +933,12 @@ if menu == "🎯 Animateur":
 # ==========================================
 elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
+    
+    # --- Vérification / initialisation des référentiels ---
+    if 'lieux_list' not in st.session_state or 'horaires_list' not in st.session_state:
+        # Fonction refresh_referentials() est définie plus haut dans le code
+        refresh_referentials()
+    
     if not liste_adh:
         st.info("ℹ️ Aucune assistante maternelle enregistrée pour le moment.")
         st.markdown("""
@@ -952,13 +958,17 @@ elif menu == "📝 Inscriptions":
                 ateliers_bruts = supabase.table("ateliers").select("*").eq("est_actif", True).gte("date_atelier", today_str).order("date_atelier").execute().data or []
             except:
                 ateliers_bruts = []
+            
+            # Construction des dictionnaires de correspondance à partir des référentiels en session
             lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
             horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
+            
             ateliers = []
             for at in ateliers_bruts:
                 at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
                 at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
                 ateliers.append(at)
+            
             if not ateliers:
                 st.info("ℹ️ Aucun atelier à venir. Consultez l'Administration → 🏗️ Ateliers pour en créer.")
             else:
@@ -1044,7 +1054,7 @@ elif menu == "📝 Inscriptions":
                                             supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
                                             enregistrer_log(user_principal, "Inscription", f"{qui} s'inscrit (+{nb_e} enf.) - {at_info_log}")
                                             st.rerun()
-
+                                            
 # ==========================================
 # SECTION 📊 SUIVI & RÉCAP
 # ==========================================
