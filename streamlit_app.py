@@ -119,19 +119,20 @@ def get_color(nom_lieu):
     hue = int(hash_object.hexdigest()[:8], 16) % len(colors)
     return colors[hue]
 
+_JOURS_EMOJI = {
+    0: "🔵",   # lundi
+    1: "🟢",   # mardi
+    2: "🟠",   # mercredi
+    3: "🟣",   # jeudi
+    4: "🔴",   # vendredi
+    5: "🔷",   # samedi
+    6: "🟡",   # dimanche
+}
+
 def get_weekday_emoji(date_str):
     """Retourne un émoji de cercle coloré selon le jour de la semaine (0=lundi, 6=dimanche)"""
-    jours_emoji = {
-        0: "🔵",   # lundi
-        1: "🟢",   # mardi
-        2: "🟠",   # mercredi
-        3: "🟣",   # jeudi
-        4: "🔴",   # vendredi
-        5: "🔷",   # samedi
-        6: "🟡",   # dimanche
-    }
     d = datetime.strptime(date_str, '%Y-%m-%d')
-    return jours_emoji.get(d.weekday(), "⚪")
+    return _JOURS_EMOJI.get(d.weekday(), "⚪")
 
 # --- CACHE : données stables (5 minutes) ---
 @st.cache_data(ttl=300)
@@ -230,9 +231,6 @@ def get_max_enfants():
     _, max_enf = get_config()
     return max_enf
 
-def get_current_code():
-    return get_secret_code()
-
 def set_max_enfants(valeur):
     try:
         supabase.table("configuration").update({"max_enfants": valeur}).eq("id", "main_config").execute()
@@ -250,24 +248,26 @@ def get_max_enfants_atelier(at, default_max):
 def normaliser_pdf_text(texte):
     if not isinstance(texte, str):
         texte = str(texte)
+    # Normalisation Unicode : supprime les accents et diacritiques
     texte = unicodedata.normalize('NFKD', texte).encode('ascii', 'ignore').decode('ascii')
-    remplacements = {
-        'œ': 'oe', 'æ': 'ae', 'Œ': 'OE', 'Æ': 'AE',
-        '—': '-', '–': '-', '…': '...',
-        '"': '"', '"': '"', '«': '"', '»': '"',
-        ''': "'", ''': "'", '©': '(c)', '®': '(r)',
-        '€': 'EUR', '£': 'GBP', '¥': 'YEN',
-    }
-    for src, dst in remplacements.items():
+    # Remplacements des caractères non couverts par NFKD
+    for src, dst in (
+        ('—', '-'), ('–', '-'), ('…', '...'),
+        ('"', '"'), ('"', '"'), ('«', '"'), ('»', '"'),
+        ('\u2018', "'"), ('\u2019', "'"), ('©', '(c)'), ('®', '(r)'),
+        ('€', 'EUR'), ('£', 'GBP'), ('¥', 'YEN'),
+    ):
         texte = texte.replace(src, dst)
     return texte
 
+_JOURS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+_MOIS_FR  = ["janvier", "février", "mars", "avril", "mai", "juin",
+              "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+_JOURS_FR_CAP = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+
 def heure_paris_fr():
-    jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-    mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
-            "septembre", "octobre", "novembre", "décembre"]
     now = datetime.now(ZoneInfo("Europe/Paris"))
-    return f"le {jours[now.weekday()]} {now.day} {mois[now.month-1]} {now.year} à {now.hour:02d}h{now.minute:02d}"
+    return f"le {_JOURS_FR[now.weekday()]} {now.day} {_MOIS_FR[now.month-1]} {now.year} à {now.hour:02d}h{now.minute:02d}"
 
 def enregistrer_log(utilisateur, action, details):
     try:
@@ -280,20 +280,16 @@ def enregistrer_log(utilisateur, action, details):
         pass
 
 def format_date_fr_complete(date_obj, gras=True):
-    jours = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
-    mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
     if isinstance(date_obj, str):
         try: date_obj = datetime.strptime(date_obj, '%Y-%m-%d')
         except: return date_obj
-    res = f"{jours[date_obj.weekday()]} {date_obj.day} {mois[date_obj.month-1]} {date_obj.year}"
+    res = f"{_JOURS_FR_CAP[date_obj.weekday()]} {date_obj.day} {_MOIS_FR[date_obj.month-1]} {date_obj.year}"
     return f"**{res}**" if gras else res
 
 def format_date_fr_simple(date_str):
-    jours = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
-    mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
     try:
         d = datetime.strptime(str(date_str), '%Y-%m-%d')
-        return f"{jours[d.weekday()]} {d.day} {mois[d.month-1]} {d.year}"
+        return f"{_JOURS_FR_CAP[d.weekday()]} {d.day} {_MOIS_FR[d.month-1]} {d.year}"
     except:
         return str(date_str)
 
@@ -307,13 +303,9 @@ def parse_date_fr_to_iso(date_str):
         pass
     parts = clean.split(" ")
     if len(parts) >= 4:
-        jour = parts[1]
-        mois_texte = parts[2].lower()
-        annee = parts[3]
-        mois_numerique = ["janvier", "février", "mars", "avril", "mai", "juin",
-                          "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
-        if mois_texte in mois_numerique:
-            m = mois_numerique.index(mois_texte) + 1
+        jour, mois_texte, annee = parts[1], parts[2].lower(), parts[3]
+        if mois_texte in _MOIS_FR:
+            m = _MOIS_FR.index(mois_texte) + 1
             try:
                 return f"{annee}-{m:02d}-{int(jour):02d}"
             except:
@@ -341,10 +333,7 @@ def construire_cache_ins(inscriptions_brutes):
     """Transforme une liste plate d'inscriptions en dict {atelier_id: [inscriptions]}."""
     cache = {}
     for ins in inscriptions_brutes:
-        aid = ins['atelier_id']
-        if aid not in cache:
-            cache[aid] = []
-        cache[aid].append(ins)
+        cache.setdefault(ins['atelier_id'], []).append(ins)
     return cache
 
 def enrichir_ateliers(ateliers_bruts, lieux_dict, horaires_dict):
@@ -476,20 +465,16 @@ def export_suivi_am_pdf(title, data_triee):
         pdf.cell(0, 6, normaliser_pdf_text(detail), ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
-def export_planning_ateliers_pdf(title, ateliers_data, cache_ins_dict, animateurs_dict=None):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
-    pdf.ln(6)
+def _pdf_planning_body(pdf, ateliers_data, cache_ins_dict):
+    """Corps commun aux deux exports PDF planning (avec et sans période)."""
     if not ateliers_data:
         pdf.set_font("Arial", size=11)
         pdf.cell(0, 10, normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
-        return pdf.output(dest='S').encode('latin-1')
+        return
     for a in ateliers_data:
         ins_at = cache_ins_dict.get(a['id'], [])
         t_ad = len(ins_at)
-        t_en = sum([p['nb_enfants'] for p in ins_at])
+        t_en = sum(p['nb_enfants'] for p in ins_at)
         restantes = a['capacite_max'] - (t_ad + t_en)
         date_fr = format_date_fr_simple(a['date_atelier'])
         titre_at = a.get('titre') or "(sans titre)"
@@ -513,6 +498,14 @@ def export_planning_ateliers_pdf(title, ateliers_data, cache_ins_dict, animateur
         for p in autres:
             pdf.cell(0, 6, normaliser_pdf_text(f"       • {p['adherents']['prenom']} {p['adherents']['nom']}  ({p['nb_enfants']} enfant(s))"), ln=True)
         pdf.ln(3)
+
+def export_planning_ateliers_pdf(title, ateliers_data, cache_ins_dict, animateurs_dict=None):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
+    pdf.ln(6)
+    _pdf_planning_body(pdf, ateliers_data, cache_ins_dict)
     return pdf.output(dest='S').encode('latin-1')
 
 def export_planning_ateliers_pdf_with_period(title, ateliers_data, cache_ins_dict, date_debut, date_fin, animateurs_dict=None):
@@ -524,37 +517,7 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, cache_ins_dic
     pdf.set_font("Arial", 'I', 11)
     pdf.cell(0, 8, normaliser_pdf_text(f"Periode : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"), ln=True, align='C')
     pdf.ln(4)
-    if not ateliers_data:
-        pdf.set_font("Arial", size=11)
-        pdf.cell(0, 10, normaliser_pdf_text("Aucun atelier trouve sur cette periode."), ln=True)
-        return pdf.output(dest='S').encode('latin-1')
-    for a in ateliers_data:
-        ins_at = cache_ins_dict.get(a['id'], [])
-        t_ad = len(ins_at)
-        t_en = sum([p['nb_enfants'] for p in ins_at])
-        restantes = a['capacite_max'] - (t_ad + t_en)
-        date_fr = format_date_fr_simple(a['date_atelier'])
-        titre_at = a.get('titre') or "(sans titre)"
-        lieu = a.get('lieu_nom', '?')
-        horaire = a.get('horaire_lib', '?')
-        verrou = " [VERROUILLE]" if is_verrouille(a) else ""
-        pdf.set_fill_color(212, 230, 241)
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Arial", 'B', 11)
-        pdf.cell(0, 8, normaliser_pdf_text(f"  {date_fr} | {titre_at} | {lieu}{verrou}"), ln=True, fill=True)
-        pdf.set_font("Arial", size=10)
-        pdf.cell(0, 6, normaliser_pdf_text(f"     Horaire : {horaire}  |  AM : {t_ad}  |  Enfants : {t_en}  |  Places restantes : {restantes}"), ln=True)
-        anim_id = a.get('animateur_id')
-        anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id), None) if anim_id else None
-        autres = sorted([p for p in ins_at if p['adherent_id'] != anim_id], key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
-        if anim_ins:
-            nom_p = f"{anim_ins['adherents']['prenom']} {anim_ins['adherents']['nom']}"
-            pdf.set_font("Arial", 'B', 10)
-            pdf.cell(0, 6, normaliser_pdf_text(f"       ★ {nom_p}  ({anim_ins['nb_enfants']} enfant(s)) [ANIMATEUR]"), ln=True)
-            pdf.set_font("Arial", size=10)
-        for p in autres:
-            pdf.cell(0, 6, normaliser_pdf_text(f"       • {p['adherents']['prenom']} {p['adherents']['nom']}  ({p['nb_enfants']} enfant(s))"), ln=True)
-        pdf.ln(3)
+    _pdf_planning_body(pdf, ateliers_data, cache_ins_dict)
     return pdf.output(dest='S').encode('latin-1')
 
 def filtre_vert_menthe(label_key, options=("Tous", "Actifs", "Inactifs"), default="Tous"):
@@ -568,6 +531,60 @@ def filtre_vert_menthe(label_key, options=("Tous", "Actifs", "Inactifs"), defaul
                 st.rerun()
     return st.session_state[label_key]
 
+# --- Logique commune d'application de l'animateur (Animateur & Admin) ---
+def _appliquer_animateur_ui(at, total_occ, total_enfants_actuel, max_enf_at,
+                             anim_id_at, anim_ins, nouvel_anim, nb_enf,
+                             at_info_log, auteur, key_prefix):
+    """Applique la sélection d'animateur après vérification des capacités.
+    Retourne True si l'opération a réussi, False sinon (erreur affichée en ligne)."""
+    if nouvel_anim == "Choisir...":
+        st.warning("Veuillez sélectionner un animateur.")
+        return False
+
+    nouvel_anim_id = dict_adh_anim[nouvel_anim]
+    ancien_anim_id = anim_id_at
+    ancien_nb = anim_ins['nb_enfants'] if anim_ins else 1
+
+    if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
+        nouvelle_occupation = total_occ - (1 + ancien_nb) + (1 + nb_enf)
+        nouveau_total_enfants = total_enfants_actuel - ancien_nb + nb_enf
+        marge_enf = max_enf_at - (total_enfants_actuel - ancien_nb)
+        marge_capa = at['capacite_max'] - (total_occ - (1 + ancien_nb))
+    elif ancien_anim_id == nouvel_anim_id:
+        delta = nb_enf - ancien_nb
+        nouvelle_occupation = total_occ + delta
+        nouveau_total_enfants = total_enfants_actuel + delta
+        marge_enf = max_enf_at - total_enfants_actuel + ancien_nb
+        marge_capa = at['capacite_max'] - total_occ + ancien_nb
+    else:
+        nouvelle_occupation = total_occ + 1 + nb_enf
+        nouveau_total_enfants = total_enfants_actuel + nb_enf
+        marge_enf = max_enf_at - total_enfants_actuel
+        marge_capa = at['capacite_max'] - total_occ - 1
+
+    max_autorise = max(min(marge_enf, marge_capa, 10), 0)
+
+    if nouveau_total_enfants > max_enf_at:
+        st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé. Valeur maximale possible : {max_autorise}")
+        return False
+    if nouvelle_occupation > at['capacite_max']:
+        st.markdown(f"<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée. Valeur maximale possible : {max_autorise}</span>", unsafe_allow_html=True)
+        return False
+
+    if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
+        supabase.table("inscriptions").delete().eq("atelier_id", at['id']).eq("adherent_id", ancien_anim_id).execute()
+    supabase.table("ateliers").update({"animateur_id": nouvel_anim_id}).eq("id", at['id']).execute()
+    existing_new = supabase.table("inscriptions").select("id").eq("atelier_id", at['id']).eq("adherent_id", nouvel_anim_id).execute()
+    if existing_new.data:
+        supabase.table("inscriptions").update({"nb_enfants": nb_enf}).eq("id", existing_new.data[0]['id']).execute()
+    else:
+        supabase.table("inscriptions").insert({"adherent_id": nouvel_anim_id, "atelier_id": at['id'], "nb_enfants": nb_enf}).execute()
+    enregistrer_log(auteur, "Modification animateur", f"Animateur {nouvel_anim} ({nb_enf} enfants) - {at_info_log}")
+    invalider_cache_inscriptions()
+    st.success("Modification effectuée !")
+    st.rerun()
+    return True
+
 
 # ==========================================
 # DIALOGUES
@@ -578,7 +595,7 @@ def secure_delete_dialog(table, item_id, label):
     st.write(f"Voulez-vous vraiment désactiver/supprimer : **{label}** ?")
     pw = st.text_input("Code secret admin", type="password")
     if st.button("Confirmer", type="primary"):
-        if pw == get_current_code() or pw == "0000":
+        if pw == get_secret_code() or pw == "0000":
             supabase.table(table).update({"est_actif": False}).eq("id", item_id).execute()
             invalider_cache_referentiels()
             st.success("Opération réussie"); st.rerun()
@@ -600,7 +617,7 @@ def delete_atelier_dialog(at_id, titre, a_des_inscrits):
     st.warning(f"Voulez-vous supprimer l'atelier : **{titre_aff}** ?")
     pw = st.text_input("Code secret admin", type="password")
     if st.button("Confirmer la suppression définitive"):
-        if pw == get_current_code() or pw == "0000":
+        if pw == get_secret_code() or pw == "0000":
             if a_des_inscrits: supabase.table("inscriptions").delete().eq("atelier_id", at_id).execute()
             supabase.table("ateliers").delete().eq("id", at_id).execute()
             invalider_cache_inscriptions()
@@ -881,49 +898,9 @@ if menu == "🎯 Animateur":
                 nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=def_nb, key=f"anim_nb_{at['id']}_{idx}")
 
                 if st.button("✅ Appliquer", key=f"anim_apply_{at['id']}_{idx}", type="primary"):
-                    if nouvel_anim == "Choisir...":
-                        st.warning("Veuillez sélectionner un animateur.")
-                    else:
-                        nouvel_anim_id = dict_adh_anim[nouvel_anim]
-                        ancien_anim_id = anim_id_at
-                        ancien_nb = anim_ins['nb_enfants'] if anim_ins else 1
-
-                        if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
-                            nouvelle_occupation = total_occ - (1 + ancien_nb) + (1 + nb_enf)
-                            nouveau_total_enfants = total_enfants_actuel - ancien_nb + nb_enf
-                            marge_enf = max_enf_at - (total_enfants_actuel - ancien_nb)
-                            marge_capa = at['capacite_max'] - (total_occ - (1 + ancien_nb))
-                        elif ancien_anim_id == nouvel_anim_id:
-                            delta = nb_enf - ancien_nb
-                            nouvelle_occupation = total_occ + delta
-                            nouveau_total_enfants = total_enfants_actuel + delta
-                            marge_enf = max_enf_at - total_enfants_actuel + ancien_nb
-                            marge_capa = at['capacite_max'] - total_occ + ancien_nb
-                        else:
-                            nouvelle_occupation = total_occ + 1 + nb_enf
-                            nouveau_total_enfants = total_enfants_actuel + nb_enf
-                            marge_enf = max_enf_at - total_enfants_actuel
-                            marge_capa = at['capacite_max'] - total_occ - 1
-
-                        max_autorise = max(min(marge_enf, marge_capa, 10), 0)
-
-                        if nouveau_total_enfants > max_enf_at:
-                            st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé. Valeur maximale possible : {max_autorise}")
-                        elif nouvelle_occupation > at['capacite_max']:
-                            st.markdown(f"<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée. Valeur maximale possible : {max_autorise}</span>", unsafe_allow_html=True)
-                        else:
-                            if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
-                                supabase.table("inscriptions").delete().eq("atelier_id", at['id']).eq("adherent_id", ancien_anim_id).execute()
-                            supabase.table("ateliers").update({"animateur_id": nouvel_anim_id}).eq("id", at['id']).execute()
-                            existing_new = supabase.table("inscriptions").select("id").eq("atelier_id", at['id']).eq("adherent_id", nouvel_anim_id).execute()
-                            if existing_new.data:
-                                supabase.table("inscriptions").update({"nb_enfants": nb_enf}).eq("id", existing_new.data[0]['id']).execute()
-                            else:
-                                supabase.table("inscriptions").insert({"adherent_id": nouvel_anim_id, "atelier_id": at['id'], "nb_enfants": nb_enf}).execute()
-                            enregistrer_log(user_connecte, "Modification animateur", f"Animateur {nouvel_anim} ({nb_enf} enfants) - {at_info_log}")
-                            invalider_cache_inscriptions()
-                            st.success("Modification effectuée !")
-                            st.rerun()
+                    _appliquer_animateur_ui(at, total_occ, total_enfants_actuel, max_enf_at,
+                                            anim_id_at, anim_ins, nouvel_anim, nb_enf,
+                                            at_info_log, user_connecte, f"anim_{at['id']}")
 
 
 # ==========================================
@@ -931,37 +908,7 @@ if menu == "🎯 Animateur":
 # ==========================================
 elif menu == "📝 Inscriptions":
     st.header("📍 Inscriptions")
-    
-    # --- Initialisation locale des référentiels (évite l'erreur refresh_referentials) ---
-    if 'lieux_list' not in st.session_state:
-        try:
-            res_lieux = supabase.table("lieux").select("*").order("nom").execute()
-            all_lieux = res_lieux.data or []
-            st.session_state.lieux_list = [l for l in all_lieux if l.get("est_actif", True) is not False]
-        except:
-            st.session_state.lieux_list = []
-    if 'horaires_list' not in st.session_state:
-        try:
-            res_hor = supabase.table("horaires").select("*").execute()
-            all_hor = res_hor.data or []
-            st.session_state.horaires_list = [h for h in all_hor if h.get("est_actif", True) is not False]
-        except:
-            st.session_state.horaires_list = []
-    
-    # --- Fonction pour l'émoji coloré selon le jour ---
-    def get_weekday_emoji(date_str):
-        jours_emoji = {
-            0: "🔵",   # lundi
-            1: "🟢",   # mardi
-            2: "🟠",   # mercredi
-            3: "🟣",   # jeudi
-            4: "🔴",   # vendredi
-            5: "🔷",   # samedi
-            6: "🟡",   # dimanche
-        }
-        d = datetime.strptime(date_str, '%Y-%m-%d')
-        return jours_emoji.get(d.weekday(), "⚪")
-    
+
     if not liste_adh:
         st.info("ℹ️ Aucune assistante maternelle enregistrée pour le moment.")
         st.markdown("""
@@ -983,14 +930,7 @@ elif menu == "📝 Inscriptions":
             except:
                 ateliers_bruts = []
             
-            lieux_dict = {l['id']: l['nom'] for l in st.session_state.lieux_list}
-            horaires_dict = {h['id']: h['libelle'] for h in st.session_state.horaires_list}
-            
-            ateliers = []
-            for at in ateliers_bruts:
-                at['lieu_nom'] = lieux_dict.get(at['lieu_id'], '?')
-                at['horaire_lib'] = horaires_dict.get(at['horaire_id'], '?')
-                ateliers.append(at)
+            ateliers = enrichir_ateliers([dict(a) for a in ateliers_bruts], lieux_dict_global, horaires_dict_global)
             
             if not ateliers:
                 st.info("ℹ️ Aucun atelier à venir. Consultez l'Administration → 🏗️ Ateliers pour en créer.")
@@ -1978,49 +1918,9 @@ elif menu == "🔐 Administration":
                     nb_enf = st.number_input("Nombre d'enfants de l'animateur", min_value=0, max_value=10, value=default_nb, key=f"adm_anim_nb_{at['id']}_{idx}")
 
                     if st.button("✅ Appliquer", key=f"adm_anim_apply_{at['id']}_{idx}", type="primary"):
-                        if nouvel_anim == "Choisir...":
-                            st.warning("Veuillez sélectionner un animateur.")
-                        else:
-                            nouvel_anim_id = dict_adh_anim[nouvel_anim]
-                            ancien_anim_id = anim_id_at
-                            ancien_nb = anim_ins['nb_enfants'] if anim_ins else 1
-
-                            if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
-                                nouvelle_occupation = total_occ - (1 + ancien_nb) + (1 + nb_enf)
-                                nouveau_total_enfants = total_enfants_actuel - ancien_nb + nb_enf
-                                marge_enf = max_enf_at - (total_enfants_actuel - ancien_nb)
-                                marge_capa = at['capacite_max'] - (total_occ - (1 + ancien_nb))
-                            elif ancien_anim_id == nouvel_anim_id:
-                                delta = nb_enf - ancien_nb
-                                nouvelle_occupation = total_occ + delta
-                                nouveau_total_enfants = total_enfants_actuel + delta
-                                marge_enf = max_enf_at - total_enfants_actuel + ancien_nb
-                                marge_capa = at['capacite_max'] - total_occ + ancien_nb
-                            else:
-                                nouvelle_occupation = total_occ + 1 + nb_enf
-                                nouveau_total_enfants = total_enfants_actuel + nb_enf
-                                marge_enf = max_enf_at - total_enfants_actuel
-                                marge_capa = at['capacite_max'] - total_occ - 1
-
-                            max_autorise = max(min(marge_enf, marge_capa, 10), 0)
-
-                            if nouveau_total_enfants > max_enf_at:
-                                st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé. Valeur maximale possible : {max_autorise}")
-                            elif nouvelle_occupation > at['capacite_max']:
-                                st.markdown(f"<span style='color:red; font-weight:bold;'>❌ Trop de monde : capacité de la salle dépassée. Valeur maximale possible : {max_autorise}</span>", unsafe_allow_html=True)
-                            else:
-                                if ancien_anim_id and ancien_anim_id != nouvel_anim_id:
-                                    supabase.table("inscriptions").delete().eq("atelier_id", at['id']).eq("adherent_id", ancien_anim_id).execute()
-                                supabase.table("ateliers").update({"animateur_id": nouvel_anim_id}).eq("id", at['id']).execute()
-                                existing_new = supabase.table("inscriptions").select("id").eq("atelier_id", at['id']).eq("adherent_id", nouvel_anim_id).execute()
-                                if existing_new.data:
-                                    supabase.table("inscriptions").update({"nb_enfants": nb_enf}).eq("id", existing_new.data[0]['id']).execute()
-                                else:
-                                    supabase.table("inscriptions").insert({"adherent_id": nouvel_anim_id, "atelier_id": at['id'], "nb_enfants": nb_enf}).execute()
-                                enregistrer_log("Admin", "Modification animateur", f"Animateur {nouvel_anim} ({nb_enf} enfants) - {at_info_log}")
-                                invalider_cache_inscriptions()
-                                st.success("Modification effectuée !")
-                                st.rerun()
+                        _appliquer_animateur_ui(at, total_occ, total_enfants_actuel, max_enf_at,
+                                                anim_id_at, anim_ins, nouvel_anim, nb_enf,
+                                                at_info_log, "Admin", f"adm_anim_{at['id']}")
 
     if st.sidebar.button("🚪 Déconnexion administration"):
         st.session_state["admin_auth"] = False
