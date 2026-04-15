@@ -23,7 +23,8 @@ def check_access():
             <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh;">
                 <div style="background-color: #cfe9ff; padding: 2rem; border-radius: 20px; text-align: center; border: 2px solid #1b5e20;">
                     <h2 style="color: #1b5e20;">🔐 Accès sécurisé</h2>
-                    <p style="color: #1b5e20;">Veuillez saisir le code d'accès pour continuer.</p>
+                    <p style="color: #1b5e20; font-size: 1.8rem; font-weight: bold; margin: 10px 0 0 0;">Résa GDF</p>
+                    <p style="color: #1b5e20; margin-top: 15px;">Veuillez saisir le code d'accès pour continuer.</p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
