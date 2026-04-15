@@ -1859,6 +1859,8 @@ elif menu == "🔐 Administration":
             if res_logs.data:
                 logs_df = pd.DataFrame(res_logs.data)
                 logs_df['created_at'] = pd.to_datetime(logs_df['created_at'], utc=True).dt.tz_convert("Europe/Paris").dt.strftime('%d/%m/%Y %H:%M')
+                # Nettoyer la colonne 'details' : supprimer le texte entre crochets (date/heure ajoutée par enregistrer_log)
+                logs_df['details'] = logs_df['details'].str.replace(r' \[.*?\]$', '', regex=True)
                 st.dataframe(logs_df[['created_at', 'utilisateur', 'action', 'details']], column_config={"created_at": "Date & Heure", "utilisateur": "Auteur", "action": "Action", "details": "Détails"}, use_container_width=True, hide_index=True)
             else:
                 st.info("Aucune action enregistrée pour cette période.")
