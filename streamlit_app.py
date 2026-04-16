@@ -1093,7 +1093,7 @@ elif menu == "📊 Suivi & Récap":
     with t2:
         c_d1, c_d2 = st.columns(2)
         d_s = c_d1.date_input("Du", date.today(), key="pub_d1", format="DD/MM/YYYY")
-        d_e = c_d2.date_input("Au", d_s + timedelta(days=30), key="pub_d2", format="DD/MM/YYYY")
+        d_e = c_d2.date_input("Au", d_s + timedelta(days=90), key="pub_d2", format="DD/MM/YYYY")
 
         ateliers_bruts = get_ateliers_periode(str(d_s), str(d_e), "Actifs")
         ateliers = enrichir_ateliers([dict(a) for a in ateliers_bruts], lieux_dict_global, horaires_dict_global)
@@ -1297,7 +1297,7 @@ elif menu == "🔐 Administration":
         elif sub == "Répertoire":
             cf1, cf2, cf3 = st.columns(3)
             fs = cf1.date_input("Du", date.today()-timedelta(days=30), format="DD/MM/YYYY", key="rep_d1")
-            fe = cf2.date_input("Au", fs+timedelta(days=60), format="DD/MM/YYYY", key="rep_d2")
+            fe = cf2.date_input("Au", fs+timedelta(days=90), format="DD/MM/YYYY", key="rep_d2")
             ft = cf3.selectbox("Statut Filtre", ["Tous", "Actifs", "Inactifs"])
 
             ateliers_bruts = get_ateliers_periode(str(fs), str(fe))
@@ -1443,7 +1443,7 @@ elif menu == "🔐 Administration":
         filtre_statut_plan = st.session_state["filtre_plan_admin"]
         c1_adm, c2_adm = st.columns(2)
         d_s_a = c1_adm.date_input("Du", date.today(), key="adm_plan_d1", format="DD/MM/YYYY")
-        d_e_a = c2_adm.date_input("Au", d_s_a + timedelta(days=30), key="adm_plan_d2", format="DD/MM/YYYY")
+        d_e_a = c2_adm.date_input("Au", d_s_a + timedelta(days=90), key="adm_plan_d2", format="DD/MM/YYYY")
 
         ateliers_bruts = get_ateliers_periode(str(d_s_a), str(d_e_a), filtre_statut_plan)
         ateliers = enrichir_ateliers([dict(a) for a in ateliers_bruts], lieux_dict_global, horaires_dict_global)
