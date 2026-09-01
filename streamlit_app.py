@@ -521,17 +521,6 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, cache_ins_dic
     _pdf_planning_body(pdf, ateliers_data, cache_ins_dict)
     return pdf.output(dest='S').encode('latin-1')
 
-def filtre_vert_menthe(label_key, options=("Tous", "Actifs", "Inactifs"), default="Tous"):
-    if label_key not in st.session_state:
-        st.session_state[label_key] = default
-    cols = st.columns(len(options) + 5)
-    for i, opt in enumerate(options):
-        with cols[i]:
-            if st.button(opt, key=f"filtre_btn_{label_key}_{opt}", use_container_width=False):
-                st.session_state[label_key] = opt
-                st.rerun()
-    return st.session_state[label_key]
-
 # --- Logique commune d'application de l'animateur (Animateur & Admin) ---
 def _appliquer_animateur_ui(at, total_occ, total_enfants_actuel, max_enf_at,
                              anim_id_at, anim_ins, nouvel_anim, nb_enf,
@@ -1373,11 +1362,15 @@ elif menu == "🔐 Administration":
             with col_desact:
                 if st.button("❌ Désactiver", key="bulk_desactiver", use_container_width=True, type="primary" if st.session_state["bulk_action"] == "Désactiver" else "secondary"):
                     st.session_state["bulk_action"] = "Désactiver"; st.rerun()
+            if st.session_state["bulk_action"] == "Activer":
+                st.success("✅ Action sélectionnée : **Activer** les ateliers de la période")
+            else:
+                st.error("❌ Action sélectionnée : **Désactiver** les ateliers de la période")
             with st.form("bulk_form"):
                 c1, c2 = st.columns(2)
                 bs = c1.date_input("Début", format="DD/MM/YYYY", key="blk_d1")
                 be = c2.date_input("Fin", format="DD/MM/YYYY", key="blk_d2")
-                if st.form_submit_button("🚀 Appliquer"):
+                if st.form_submit_button(f"🚀 Appliquer : {st.session_state['bulk_action']}"):
                     supabase.table("ateliers").update({"est_actif": (st.session_state["bulk_action"] == "Activer")}).gte("date_atelier", str(bs)).lte("date_atelier", str(be)).execute()
                     invalider_cache_inscriptions(); st.rerun()
 
@@ -1436,9 +1429,9 @@ elif menu == "🔐 Administration":
         col_f1, col_f2, col_f3, col_f_rest = st.columns([1, 1, 1, 5])
         for col_f, opt in zip([col_f1, col_f2, col_f3], options_filtre_plan):
             with col_f:
-                if st.button(opt, key=f"filtre_plan_{opt}", use_container_width=True):
+                if st.button(opt, key=f"filtre_plan_{opt}", use_container_width=True, type="primary" if st.session_state["filtre_plan_admin"] == opt else "secondary"):
                     st.session_state["filtre_plan_admin"] = opt; st.rerun()
-        st.markdown("""<style>[data-testid="column"]:nth-child(1) button, [data-testid="column"]:nth-child(2) button, [data-testid="column"]:nth-child(3) button { border: 1.5px solid #80cbc4 !important; }</style>""", unsafe_allow_html=True)
+        st.caption(f"Filtre actif : **{st.session_state['filtre_plan_admin']}**")
 
         filtre_statut_plan = st.session_state["filtre_plan_admin"]
         c1_adm, c2_adm = st.columns(2)
@@ -1674,8 +1667,9 @@ elif menu == "🔐 Administration":
             col_am1, col_am2, col_am3, col_am_rest = st.columns([1, 1, 1, 5])
             for col_am, opt in zip([col_am1, col_am2, col_am3], options_filtre_am):
                 with col_am:
-                    if st.button(opt, key=f"filtre_am_{opt}", use_container_width=True):
+                    if st.button(opt, key=f"filtre_am_{opt}", use_container_width=True, type="primary" if st.session_state["filtre_liste_am"] == opt else "secondary"):
                         st.session_state["filtre_liste_am"] = opt; st.rerun()
+            st.caption(f"Filtre actif : **{st.session_state['filtre_liste_am']}**")
             filtre_am_actuel = st.session_state["filtre_liste_am"]
             st.markdown(f"**Liste des AM** ({nb_actives} actives, {nb_inactives} inactives)")
 
