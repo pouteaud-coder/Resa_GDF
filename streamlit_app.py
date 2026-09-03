@@ -5,7 +5,10 @@ from zoneinfo import ZoneInfo
 from supabase import create_client, Client
 import hashlib
 import io
+import re
+import html
 import unicodedata
+from urllib.parse import urlencode, quote
 from fpdf import FPDF
 
 
@@ -82,6 +85,8 @@ st.markdown("""
     .stButton button { border-radius: 8px !important; background-color: #b2d8d8 !important; color: white !important; border: 0.2px solid #b2d8d8 !important; }
     .stButton button:hover { background-color: #0a3d0a !important; }
     .badge-verrouille { background-color: #b2d8d8; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
+    .agenda-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; border: 1px solid #7ec8a3; background-color: #a8e6cf; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem; padding: 4px 14px; text-decoration: none !important; margin-left: 8px; white-space: nowrap; }
+    .agenda-btn:hover { background-color: #d4f5e8; }
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p { color: #1b5e20 !important; }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
     .stTabs [data-baseweb="tab"] { background-color: #e6f4ff; border-radius: 20px !important; padding: 6px 18px; color: #1b5e20; border: 1px solid #a8cfe8 !important; font-size: 0.9rem; }
@@ -319,6 +324,48 @@ def parse_date_fr_to_iso(date_str):
     except:
         pass
     return clean
+
+_RE_HORAIRE = re.compile(r'^\s*(\d{1,2})[:hH](\d{2})?\s*-\s*(\d{1,2})[:hH](\d{2})?\s*$')
+
+def lien_google_agenda(date_atelier, horaire_lib, titre, lieu_nom):
+    """Construit un lien 'Ajouter à Google Agenda' pré-rempli pour un atelier.
+    Retourne None si la date est invalide."""
+    try:
+        d = datetime.strptime(str(date_atelier), '%Y-%m-%d')
+    except Exception:
+        return None
+
+    m = _RE_HORAIRE.match(str(horaire_lib) or "")
+    if m:
+        hd_s, md_s, hf_s, mf_s = m.groups()
+        hd, md, hf, mf = int(hd_s), int(md_s or 0), int(hf_s), int(mf_s or 0)
+        dt_debut = d.replace(hour=hd, minute=md)
+        dt_fin = d.replace(hour=hf, minute=mf)
+        if dt_fin <= dt_debut:
+            dt_fin = dt_debut + timedelta(hours=1)
+        dates_param = f"{dt_debut.strftime('%Y%m%dT%H%M%S')}/{dt_fin.strftime('%Y%m%dT%H%M%S')}"
+    else:
+        # Horaire non reconnu : événement journée entière
+        dates_param = f"{d.strftime('%Y%m%d')}/{(d + timedelta(days=1)).strftime('%Y%m%d')}"
+
+    titre_evt = f"Atelier GDF - {titre}" if titre else "Atelier GDF"
+    details_evt = titre_evt + (f" - {horaire_lib}" if horaire_lib else "")
+    params = {
+        "action": "TEMPLATE",
+        "text": titre_evt,
+        "dates": dates_param,
+        "details": details_evt,
+        "location": lieu_nom or "",
+        "ctz": "Europe/Paris",
+    }
+    return "https://calendar.google.com/calendar/render?" + urlencode(params, quote_via=quote)
+
+def bouton_agenda_html(date_atelier, horaire_lib, titre, lieu_nom):
+    """Retourne le HTML du bouton 'Ajouter à mon agenda', ou une chaîne vide si le lien ne peut pas être généré."""
+    lien = lien_google_agenda(date_atelier, horaire_lib, titre, lieu_nom)
+    if not lien:
+        return ""
+    return f"<a class='agenda-btn' href='{html.escape(lien)}' target='_blank' rel='noopener'>📅 Ajouter à mon agenda</a>"
 
 def is_verrouille(at):
     return bool(at.get("est_verrouille", False))
@@ -724,7 +771,8 @@ def dialog_attribuer_animateur(at_id, titre_at, ancien_anim_id, ancien_anim_nom,
 
 @st.dialog("❌ Retirer l'animateur")
 def dialog_retirer_animateur(at_id, titre_at, anim_id, anim_nom, auteur="Admin"):
-    st.warning(f"Voulez-vous retirer **{anim_nom}** de son rôle d'animateur pour l'atelier **{titre_at}** ?")
+    titre_aff = titre_at if titre_at else "(sans titre)"
+    st.warning(f"Voulez-vous retirer **{anim_nom}** de son rôle d'animateur pour l'atelier **{titre_aff}** ?")
     st.write("Son inscription sera également supprimée.")
     c1, c2 = st.columns(2)
     with c1:
@@ -1075,7 +1123,9 @@ elif menu == "📊 Suivi & Récap":
                         curr_u = nom_u
                     at = i['ateliers']
                     c_l = get_color(at['lieu_nom'])
-                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {at['titre']} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
+                    titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
+                    btn_agenda = bouton_agenda_html(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'])
+                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)** {btn_agenda}", unsafe_allow_html=True)
             else:
                 st.info("Aucune inscription trouvée pour les AM sélectionnées.")
 
