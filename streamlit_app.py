@@ -7,6 +7,7 @@ import hashlib
 import io
 import re
 import html
+import calendar
 import unicodedata
 from urllib.parse import urlencode, quote
 from fpdf import FPDF
@@ -298,6 +299,15 @@ def format_date_fr_simple(date_str):
         return f"{_JOURS_FR_CAP[d.weekday()]} {d.day} {_MOIS_FR[d.month-1]} {d.year}"
     except:
         return str(date_str)
+
+def ajouter_mois(d, nb_mois):
+    """Ajoute nb_mois à une date, en gérant le changement d'année et les fins de mois
+    (ex: 31 janvier + 1 mois -> 28 ou 29 février selon l'année)."""
+    mois_total = d.month - 1 + nb_mois
+    annee = d.year + mois_total // 12
+    mois = mois_total % 12 + 1
+    jour = min(d.day, calendar.monthrange(annee, mois)[1])
+    return d.replace(year=annee, month=mois, day=jour)
 
 def parse_date_fr_to_iso(date_str):
     clean = str(date_str).replace("**", "").strip()
@@ -1132,7 +1142,7 @@ elif menu == "📊 Suivi & Récap":
     with t2:
         c_d1, c_d2 = st.columns(2)
         d_s = c_d1.date_input("Du", date.today(), key="pub_d1", format="DD/MM/YYYY")
-        d_e = c_d2.date_input("Au", d_s + timedelta(days=90), key="pub_d2", format="DD/MM/YYYY")
+        d_e = c_d2.date_input("Au", ajouter_mois(date.today(), 12), key="pub_d2", format="DD/MM/YYYY")
 
         ateliers_bruts = get_ateliers_periode(str(d_s), str(d_e), "Actifs")
         ateliers = enrichir_ateliers([dict(a) for a in ateliers_bruts], lieux_dict_global, horaires_dict_global)
@@ -1336,7 +1346,7 @@ elif menu == "🔐 Administration":
         elif sub == "Répertoire":
             cf1, cf2, cf3 = st.columns(3)
             fs = cf1.date_input("Du", date.today()-timedelta(days=30), format="DD/MM/YYYY", key="rep_d1")
-            fe = cf2.date_input("Au", fs+timedelta(days=90), format="DD/MM/YYYY", key="rep_d2")
+            fe = cf2.date_input("Au", ajouter_mois(date.today(), 12), format="DD/MM/YYYY", key="rep_d2")
             ft = cf3.selectbox("Statut Filtre", ["Tous", "Actifs", "Inactifs"])
 
             ateliers_bruts = get_ateliers_periode(str(fs), str(fe))
@@ -1486,7 +1496,7 @@ elif menu == "🔐 Administration":
         filtre_statut_plan = st.session_state["filtre_plan_admin"]
         c1_adm, c2_adm = st.columns(2)
         d_s_a = c1_adm.date_input("Du", date.today(), key="adm_plan_d1", format="DD/MM/YYYY")
-        d_e_a = c2_adm.date_input("Au", d_s_a + timedelta(days=90), key="adm_plan_d2", format="DD/MM/YYYY")
+        d_e_a = c2_adm.date_input("Au", ajouter_mois(date.today(), 12), key="adm_plan_d2", format="DD/MM/YYYY")
 
         ateliers_bruts = get_ateliers_periode(str(d_s_a), str(d_e_a), filtre_statut_plan)
         ateliers = enrichir_ateliers([dict(a) for a in ateliers_bruts], lieux_dict_global, horaires_dict_global)
@@ -1918,7 +1928,7 @@ elif menu == "🔐 Administration":
 
         ca_d1, ca_d2 = st.columns(2)
         anim_d_debut = ca_d1.date_input("Du", date.today(), key="anim_adm_d1", format="DD/MM/YYYY")
-        anim_d_fin = ca_d2.date_input("Au", date.today() + timedelta(days=30), key="anim_adm_d2", format="DD/MM/YYYY")
+        anim_d_fin = ca_d2.date_input("Au", ajouter_mois(date.today(), 12), key="anim_adm_d2", format="DD/MM/YYYY")
 
         ateliers_bruts_anim = get_ateliers_periode(str(anim_d_debut), str(anim_d_fin), "Actifs")
         ateliers_anim = enrichir_ateliers([dict(a) for a in ateliers_bruts_anim], lieux_dict_global, horaires_dict_global)
