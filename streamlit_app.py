@@ -7,6 +7,7 @@ import hashlib
 import io
 import re
 import html
+import base64
 import calendar
 import unicodedata
 from urllib.parse import urlencode, quote
@@ -469,6 +470,16 @@ def fichier_ics_atelier(date_atelier, horaire_lib, titre, lieu_nom, atelier_id=N
         "END:VCALENDAR",
     ]
     return ("\r\n".join(lignes) + "\r\n").encode("utf-8")
+
+def bouton_ics_html(ics_data, file_name):
+    """Retourne le HTML du bouton 'iPhone / Autre agenda' (fichier .ics encodé en data URI),
+    stylé exactement comme le bouton 'Google Agenda' (classe CSS 'agenda-btn' partagée),
+    ou une chaîne vide si les données sont absentes."""
+    if not ics_data:
+        return ""
+    b64 = base64.b64encode(ics_data).decode("ascii")
+    href = f"data:text/calendar;charset=utf-8;base64,{b64}"
+    return f"<a class='agenda-btn' href='{href}' download='{html.escape(file_name)}'>📱 iPhone / Autre agenda</a>"
 
 def is_verrouille(at):
     return bool(at.get("est_verrouille", False))
@@ -1236,10 +1247,9 @@ elif menu == "📊 Suivi & Récap":
                         if btn_agenda:
                             st.markdown(btn_agenda, unsafe_allow_html=True)
                     with col_i:
-                        if ics_data:
-                            st.download_button("📱 iPhone / Autre agenda", data=ics_data,
-                                                file_name=f"atelier_{at['id']}.ics", mime="text/calendar",
-                                                key=f"ics_{i.get('id', at['id'])}_{at['id']}")
+                        btn_ics = bouton_ics_html(ics_data, f"atelier_{at['id']}.ics")
+                        if btn_ics:
+                            st.markdown(btn_ics, unsafe_allow_html=True)
             else:
                 st.info("Aucune inscription trouvée pour les AM sélectionnées.")
 
