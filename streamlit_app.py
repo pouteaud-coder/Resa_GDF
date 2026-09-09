@@ -86,7 +86,7 @@ st.markdown("""
     .stButton button { border-radius: 8px !important; background-color: #b2d8d8 !important; color: white !important; border: 0.2px solid #b2d8d8 !important; }
     .stButton button:hover { background-color: #0a3d0a !important; }
     .badge-verrouille { background-color: #b2d8d8; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
-    .agenda-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; border: 1px solid #7ec8a3; background-color: #a8e6cf; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem; padding: 4px 14px; text-decoration: none !important; margin-left: 8px; white-space: nowrap; }
+    .agenda-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; border: 1px solid #7ec8a3; background-color: #a8e6cf; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem; padding: 4px 14px; text-decoration: none !important; white-space: nowrap; margin-top: 2px; }
     .agenda-btn:hover { background-color: #d4f5e8; }
     .stDownloadButton button { border-radius: 30px !important; border: 1px solid #7ec8a3 !important; background-color: #a8e6cf !important; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem !important; padding: 4px 14px !important; }
     .stDownloadButton button:hover { background-color: #d4f5e8 !important; border-color: #7ec8a3 !important; }
@@ -1199,15 +1199,18 @@ elif menu == "📊 Suivi & Récap":
                     at = i['ateliers']
                     c_l = get_color(at['lieu_nom'])
                     titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
+                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
                     btn_agenda = bouton_agenda_html(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'])
-                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)** {btn_agenda}", unsafe_allow_html=True)
                     ics_data = fichier_ics_atelier(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'], at['id'])
-                    if ics_data:
-                        col_ics, _ = st.columns([0.28, 0.72])
-                        with col_ics:
+                    col_g, col_i, _ = st.columns([0.16, 0.22, 0.62])
+                    with col_g:
+                        if btn_agenda:
+                            st.markdown(btn_agenda, unsafe_allow_html=True)
+                    with col_i:
+                        if ics_data:
                             st.download_button("📱 iPhone / Autre agenda", data=ics_data,
                                                 file_name=f"atelier_{at['id']}.ics", mime="text/calendar",
-                                                key=f"ics_{i.get('id', at['id'])}_{at['id']}", use_container_width=True)
+                                                key=f"ics_{i.get('id', at['id'])}_{at['id']}")
             else:
                 st.info("Aucune inscription trouvée pour les AM sélectionnées.")
 
