@@ -7,7 +7,6 @@ import hashlib
 import io
 import re
 import html
-import base64
 import calendar
 import unicodedata
 from urllib.parse import urlencode, quote
@@ -471,15 +470,19 @@ def fichier_ics_atelier(date_atelier, horaire_lib, titre, lieu_nom, atelier_id=N
     ]
     return ("\r\n".join(lignes) + "\r\n").encode("utf-8")
 
-def bouton_ics_html(ics_data, file_name):
-    """Retourne le HTML du bouton 'iPhone / Autre agenda' (fichier .ics encodé en data URI),
-    stylé exactement comme le bouton 'Google Agenda' (classe CSS 'agenda-btn' partagée),
-    ou une chaîne vide si les données sont absentes."""
+def bouton_ics_html(ics_data):
+    """Retourne le HTML du bouton 'iPhone / Autre agenda' : lien 'data:' vers le contenu .ics,
+    SANS attribut 'download'. Sur iPhone/Safari, un tel lien est reconnu nativement comme un
+    événement de calendrier et ouvre directement la fiche "Ajouter à Calendrier" (pas de fichier
+    à télécharger puis importer manuellement). L'attribut 'download' forcerait au contraire un
+    enregistrement de fichier (comportement précédent, corrigé ici) et empêcherait cet ajout direct.
+    Stylé exactement comme le bouton 'Google Agenda' (classe CSS 'agenda-btn' partagée).
+    Retourne une chaîne vide si les données sont absentes."""
     if not ics_data:
         return ""
-    b64 = base64.b64encode(ics_data).decode("ascii")
-    href = f"data:text/calendar;charset=utf-8;base64,{b64}"
-    return f"<a class='agenda-btn' href='{href}' download='{html.escape(file_name)}'>📱 iPhone / Autre agenda</a>"
+    contenu = ics_data.decode("utf-8") if isinstance(ics_data, bytes) else ics_data
+    href = f"data:text/calendar;charset=utf-8,{quote(contenu)}"
+    return f"<a class='agenda-btn' href='{href}'>📱 iPhone / Autre agenda</a>"
 
 def is_verrouille(at):
     return bool(at.get("est_verrouille", False))
@@ -1247,7 +1250,7 @@ elif menu == "📊 Suivi & Récap":
                         if btn_agenda:
                             st.markdown(btn_agenda, unsafe_allow_html=True)
                     with col_i:
-                        btn_ics = bouton_ics_html(ics_data, f"atelier_{at['id']}.ics")
+                        btn_ics = bouton_ics_html(ics_data)
                         if btn_ics:
                             st.markdown(btn_ics, unsafe_allow_html=True)
             else:
