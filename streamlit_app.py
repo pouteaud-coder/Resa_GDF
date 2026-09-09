@@ -88,6 +88,8 @@ st.markdown("""
     .badge-verrouille { background-color: #b2d8d8; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
     .agenda-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; border: 1px solid #7ec8a3; background-color: #a8e6cf; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem; padding: 4px 14px; text-decoration: none !important; margin-left: 8px; white-space: nowrap; }
     .agenda-btn:hover { background-color: #d4f5e8; }
+    .stDownloadButton button { border-radius: 30px !important; border: 1px solid #7ec8a3 !important; background-color: #a8e6cf !important; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem !important; padding: 4px 14px !important; }
+    .stDownloadButton button:hover { background-color: #d4f5e8 !important; border-color: #7ec8a3 !important; }
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p { color: #1b5e20 !important; }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
     .stTabs [data-baseweb="tab"] { background-color: #e6f4ff; border-radius: 20px !important; padding: 6px 18px; color: #1b5e20; border: 1px solid #a8cfe8 !important; font-size: 0.9rem; }
@@ -337,9 +339,10 @@ def parse_date_fr_to_iso(date_str):
 
 _RE_HORAIRE = re.compile(r'^\s*(\d{1,2})[:hH](\d{2})?\s*-\s*(\d{1,2})[:hH](\d{2})?\s*$')
 
-def lien_google_agenda(date_atelier, horaire_lib, titre, lieu_nom):
-    """Construit un lien 'Ajouter à Google Agenda' pré-rempli pour un atelier.
-    Retourne None si la date est invalide."""
+def _plage_horaire_atelier(date_atelier, horaire_lib):
+    """Calcule la plage horaire d'un atelier à partir de sa date et de son libellé d'horaire.
+    Retourne (dt_debut, dt_fin, journee_entiere) en heure locale Europe/Paris (naïve),
+    ou None si la date est invalide."""
     try:
         d = datetime.strptime(str(date_atelier), '%Y-%m-%d')
     except Exception:
@@ -353,13 +356,30 @@ def lien_google_agenda(date_atelier, horaire_lib, titre, lieu_nom):
         dt_fin = d.replace(hour=hf, minute=mf)
         if dt_fin <= dt_debut:
             dt_fin = dt_debut + timedelta(hours=1)
-        dates_param = f"{dt_debut.strftime('%Y%m%dT%H%M%S')}/{dt_fin.strftime('%Y%m%dT%H%M%S')}"
+        return dt_debut, dt_fin, False
     else:
         # Horaire non reconnu : événement journée entière
-        dates_param = f"{d.strftime('%Y%m%d')}/{(d + timedelta(days=1)).strftime('%Y%m%d')}"
+        return d, d + timedelta(days=1), True
 
+def _titre_details_evenement(titre, horaire_lib):
     titre_evt = f"Atelier GDF - {titre}" if titre else "Atelier GDF"
     details_evt = titre_evt + (f" - {horaire_lib}" if horaire_lib else "")
+    return titre_evt, details_evt
+
+def lien_google_agenda(date_atelier, horaire_lib, titre, lieu_nom):
+    """Construit un lien 'Ajouter à Google Agenda' pré-rempli pour un atelier.
+    Retourne None si la date est invalide."""
+    plage = _plage_horaire_atelier(date_atelier, horaire_lib)
+    if not plage:
+        return None
+    dt_debut, dt_fin, journee_entiere = plage
+
+    if journee_entiere:
+        dates_param = f"{dt_debut.strftime('%Y%m%d')}/{dt_fin.strftime('%Y%m%d')}"
+    else:
+        dates_param = f"{dt_debut.strftime('%Y%m%dT%H%M%S')}/{dt_fin.strftime('%Y%m%dT%H%M%S')}"
+
+    titre_evt, details_evt = _titre_details_evenement(titre, horaire_lib)
     params = {
         "action": "TEMPLATE",
         "text": titre_evt,
@@ -371,14 +391,59 @@ def lien_google_agenda(date_atelier, horaire_lib, titre, lieu_nom):
     return "https://calendar.google.com/calendar/render?" + urlencode(params, quote_via=quote)
 
 def bouton_agenda_html(date_atelier, horaire_lib, titre, lieu_nom):
-    """Retourne le HTML du bouton 'Ajouter à mon agenda', ou une chaîne vide si le lien ne peut pas être généré."""
+    """Retourne le HTML du bouton 'Google Agenda', ou une chaîne vide si le lien ne peut pas être généré."""
     lien = lien_google_agenda(date_atelier, horaire_lib, titre, lieu_nom)
     if not lien:
         return ""
-    return f"<a class='agenda-btn' href='{html.escape(lien)}' target='_blank' rel='noopener'>📅 Ajouter à mon agenda</a>"
+    return f"<a class='agenda-btn' href='{html.escape(lien)}' target='_blank' rel='noopener'>📅 Google Agenda</a>"
+
+def _ics_echapper(txt):
+    return str(txt).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+def fichier_ics_atelier(date_atelier, horaire_lib, titre, lieu_nom, atelier_id=None):
+    """Construit le contenu d'un fichier .ics (format universel) pour un atelier :
+    compatible Calendrier Apple/iPhone, Outlook, Google Agenda, etc.
+    Retourne des bytes UTF-8, ou None si la date est invalide."""
+    plage = _plage_horaire_atelier(date_atelier, horaire_lib)
+    if not plage:
+        return None
+    dt_debut, dt_fin, journee_entiere = plage
+    titre_evt, details_evt = _titre_details_evenement(titre, horaire_lib)
+
+    if journee_entiere:
+        dtstart = f"DTSTART;VALUE=DATE:{dt_debut.strftime('%Y%m%d')}"
+        dtend = f"DTEND;VALUE=DATE:{dt_fin.strftime('%Y%m%d')}"
+    else:
+        dt_debut_utc = dt_debut.replace(tzinfo=ZoneInfo("Europe/Paris")).astimezone(ZoneInfo("UTC"))
+        dt_fin_utc = dt_fin.replace(tzinfo=ZoneInfo("Europe/Paris")).astimezone(ZoneInfo("UTC"))
+        dtstart = f"DTSTART:{dt_debut_utc.strftime('%Y%m%dT%H%M%SZ')}"
+        dtend = f"DTEND:{dt_fin_utc.strftime('%Y%m%dT%H%M%SZ')}"
+
+    dtstamp = datetime.now(ZoneInfo("Europe/Paris")).astimezone(ZoneInfo("UTC")).strftime('%Y%m%dT%H%M%SZ')
+    cle_uid = f"{atelier_id or ''}-{date_atelier}-{horaire_lib or ''}"
+    uid = f"{hashlib.md5(str(cle_uid).encode()).hexdigest()}@resa-gdf"
+
+    lignes = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Resa GDF//FR",
+        "CALSCALE:GREGORIAN",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        f"DTSTAMP:{dtstamp}",
+        dtstart,
+        dtend,
+        f"SUMMARY:{_ics_echapper(titre_evt)}",
+        f"DESCRIPTION:{_ics_echapper(details_evt)}",
+        f"LOCATION:{_ics_echapper(lieu_nom or '')}",
+        "END:VEVENT",
+        "END:VCALENDAR",
+    ]
+    return ("\r\n".join(lignes) + "\r\n").encode("utf-8")
 
 def is_verrouille(at):
     return bool(at.get("est_verrouille", False))
+
 
 def trier_par_nom_puis_date(data):
     return sorted(data, key=lambda i: (
@@ -1136,6 +1201,13 @@ elif menu == "📊 Suivi & Récap":
                     titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
                     btn_agenda = bouton_agenda_html(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'])
                     st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)** {btn_agenda}", unsafe_allow_html=True)
+                    ics_data = fichier_ics_atelier(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'], at['id'])
+                    if ics_data:
+                        col_ics, _ = st.columns([0.28, 0.72])
+                        with col_ics:
+                            st.download_button("📱 iPhone / Autre agenda", data=ics_data,
+                                                file_name=f"atelier_{at['id']}.ics", mime="text/calendar",
+                                                key=f"ics_{i.get('id', at['id'])}_{at['id']}", use_container_width=True)
             else:
                 st.info("Aucune inscription trouvée pour les AM sélectionnées.")
 
