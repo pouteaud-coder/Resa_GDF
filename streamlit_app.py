@@ -88,8 +88,37 @@ st.markdown("""
     .badge-verrouille { background-color: #b2d8d8; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
     .agenda-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; border: 1px solid #7ec8a3; background-color: #a8e6cf; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem; padding: 4px 14px; text-decoration: none !important; white-space: nowrap; margin-top: 2px; }
     .agenda-btn:hover { background-color: #d4f5e8; }
-    .stDownloadButton button { border-radius: 30px !important; border: 1px solid #7ec8a3 !important; background-color: #a8e6cf !important; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem !important; padding: 4px 14px !important; width: auto !important; white-space: nowrap !important; overflow: visible !important; }
-    .stDownloadButton button:hover { background-color: #d4f5e8 !important; border-color: #7ec8a3 !important; }
+    .stDownloadButton button,
+    div[data-testid="stDownloadButton"] button,
+    .stDownloadButton button[kind="secondary"],
+    div[data-testid="stDownloadButton"] button[kind="secondary"] {
+        border-radius: 30px !important;
+        border: 1px solid #7ec8a3 !important;
+        background-color: #a8e6cf !important;
+        color: #1b5e20 !important;
+        font-weight: bold !important;
+        font-size: 0.85rem !important;
+        padding: 4px 14px !important;
+        width: auto !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+    }
+    .stDownloadButton button *,
+    div[data-testid="stDownloadButton"] button * {
+        color: #1b5e20 !important;
+    }
+    .stDownloadButton button:hover,
+    div[data-testid="stDownloadButton"] button:hover,
+    .stDownloadButton button:focus,
+    div[data-testid="stDownloadButton"] button:focus,
+    .stDownloadButton button:focus:not(:active),
+    div[data-testid="stDownloadButton"] button:focus:not(:active),
+    .stDownloadButton button:active,
+    div[data-testid="stDownloadButton"] button:active {
+        background-color: #d4f5e8 !important;
+        border-color: #7ec8a3 !important;
+        color: #1b5e20 !important;
+    }
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p { color: #1b5e20 !important; }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
     .stTabs [data-baseweb="tab"] { background-color: #e6f4ff; border-radius: 20px !important; padding: 6px 18px; color: #1b5e20; border: 1px solid #a8cfe8 !important; font-size: 0.9rem; }
