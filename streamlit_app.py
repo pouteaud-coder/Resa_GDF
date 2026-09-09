@@ -88,7 +88,7 @@ st.markdown("""
     .badge-verrouille { background-color: #b2d8d8; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 6px; }
     .agenda-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; border: 1px solid #7ec8a3; background-color: #a8e6cf; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem; padding: 4px 14px; text-decoration: none !important; white-space: nowrap; margin-top: 2px; }
     .agenda-btn:hover { background-color: #d4f5e8; }
-    .stDownloadButton button { border-radius: 30px !important; border: 1px solid #7ec8a3 !important; background-color: #a8e6cf !important; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem !important; padding: 4px 14px !important; }
+    .stDownloadButton button { border-radius: 30px !important; border: 1px solid #7ec8a3 !important; background-color: #a8e6cf !important; color: #1b5e20 !important; font-weight: bold; font-size: 0.85rem !important; padding: 4px 14px !important; width: auto !important; white-space: nowrap !important; overflow: visible !important; }
     .stDownloadButton button:hover { background-color: #d4f5e8 !important; border-color: #7ec8a3 !important; }
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p { color: #1b5e20 !important; }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
@@ -1202,7 +1202,7 @@ elif menu == "📊 Suivi & Récap":
                     st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
                     btn_agenda = bouton_agenda_html(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'])
                     ics_data = fichier_ics_atelier(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'], at['id'])
-                    col_g, col_i, _ = st.columns([0.16, 0.22, 0.62])
+                    col_g, col_i, _ = st.columns([0.16, 0.34, 0.50])
                     with col_g:
                         if btn_agenda:
                             st.markdown(btn_agenda, unsafe_allow_html=True)
