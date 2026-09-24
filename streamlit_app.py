@@ -671,9 +671,17 @@ def rendu_html_stats_couleur(am_rows, couleurs_utilisees, couleur_lieux, data_am
     d'inscriptions + toutes les dates. Colonne Total à droite."""
     css = """
     <style>
-    .rs-wrap { overflow-x: auto; }
+    .rs-wrap { max-height: 65vh; overflow: auto; border: 1px solid #274a6e; border-radius: 6px; }
     .rs-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; background: white; }
     .rs-table thead th { border: 1px solid #274a6e; padding: 0; min-width: 130px; }
+    .rs-table thead tr:first-child th {
+        position: sticky; top: 0; z-index: 3;
+        box-shadow: 0 1px 0 #274a6e;
+    }
+    .rs-table thead tr:last-child th {
+        position: sticky; top: 36px; z-index: 2;
+        box-shadow: 0 2px 2px -1px rgba(0,0,0,0.15);
+    }
     .rs-am-th { background: #1b3a5c !important; color: white; text-align: left !important;
                 padding: 8px 8px 8px 12px !important; font-size: 0.75rem; text-transform: uppercase; min-width: 160px; }
     .rs-color-th { text-align: center; padding: 7px 6px !important; font-weight: 800;
@@ -682,7 +690,7 @@ def rendu_html_stats_couleur(am_rows, couleurs_utilisees, couleur_lieux, data_am
                    padding: 8px 6px !important; font-size: 0.75rem; text-transform: uppercase; min-width: 60px; }
     .rs-lieu-label { background: #f0f3f6 !important; color: #1b3a5c; text-align: left !important;
                      padding: 5px 12px !important; font-size: 0.7rem; font-weight: 600; text-transform: none; }
-    .rs-lieu { background: rgba(255,255,255,0.94) !important; color: #1b3a5c; font-size: 0.72rem;
+    .rs-lieu { background: rgba(255,255,255,0.98) !important; color: #1b3a5c; font-size: 0.72rem;
                font-weight: 700; padding: 5px 6px !important; text-align: center; }
     .rs-lieu.unused { color: #9aa1a8; font-weight: 500; font-style: italic; }
     .rs-lieu.warn { color: #a12626; }
@@ -694,6 +702,7 @@ def rendu_html_stats_couleur(am_rows, couleurs_utilisees, couleur_lieux, data_am
     .rs-empty { color: #c3c8cd; }
     .rs-count { font-weight: 800; font-size: 1.05rem; line-height: 1; display: block; }
     .rs-dates { font-size: 0.7rem; color: #6b7280; font-style: italic; line-height: 1.3; margin-top: 2px; }
+    .rs-date-anim { color: #15803d; font-weight: 800; font-style: normal; }
     .rs-total-cell { font-weight: 800; font-size: 1.05rem; color: #1b3a5c !important; background: #eef3f8 !important; }
     </style>
     """
@@ -726,15 +735,22 @@ def rendu_html_stats_couleur(am_rows, couleurs_utilisees, couleur_lieux, data_am
             entry = data_am.get(am_id, {}).get(c)
             if entry and entry["count"] > 0:
                 total_am += entry["count"]
-                dates_txt = ", ".join(format_date_courte(d) for d in sorted(entry["dates"]))
+                dates_sorted = sorted(entry["dates"], key=lambda t: t[0])
+                dates_html_parts = []
+                for d, est_anim in dates_sorted:
+                    txt = html.escape(format_date_courte(d))
+                    dates_html_parts.append(f'<span class="rs-date-anim">{txt}</span>' if est_anim else txt)
+                dates_txt = ", ".join(dates_html_parts)
                 hexcol = hex_couleur_badge(c)
                 parts.append(f'<td><span class="rs-count" style="color:{hexcol}">{entry["count"]}</span>'
-                             f'<div class="rs-dates">{html.escape(dates_txt)}</div></td>')
+                             f'<div class="rs-dates">{dates_txt}</div></td>')
             else:
                 parts.append('<td class="rs-empty">–</td>')
         parts.append(f'<td class="rs-total-cell">{total_am}</td>')
         parts.append('</tr>')
     parts.append('</tbody></table></div>')
+    parts.append('<div style="margin-top:4px; font-size:0.72rem; color:#6b7280;">'
+                  '<span class="rs-date-anim">Date en gras vert</span> = l\'assistante maternelle était animatrice de cet atelier.</div>')
     return "".join(parts)
 
 def export_stats_couleur_excel(am_rows, couleurs_utilisees, couleur_lieux, data_am, date_debut, date_fin, statut_filtre):
@@ -792,6 +808,7 @@ def export_stats_couleur_excel(am_rows, couleurs_utilisees, couleur_lieux, data_
         count_fmts = {c: workbook.add_format({'bold': True, 'font_size': 13, 'font_color': hex_couleur_badge(c)})
                       for c in couleurs_utilisees}
         dates_run_fmt = workbook.add_format({'italic': True, 'font_size': 8, 'font_color': '#6b7280'})
+        anim_date_fmt = workbook.add_format({'italic': True, 'bold': True, 'font_size': 8, 'font_color': '#15803d'})
 
         r = sub_row + 1
         for nom, prenom, am_id in am_rows:
@@ -803,14 +820,17 @@ def export_stats_couleur_excel(am_rows, couleurs_utilisees, couleur_lieux, data_
                 entry = data_am.get(am_id, {}).get(c)
                 if entry and entry["count"] > 0:
                     total_am += entry["count"]
-                    dates_txt = normaliser_pdf_text(", ".join(format_date_courte(d) for d in sorted(entry["dates"])))
-                    max_lignes = max(max_lignes, 1 + (len(dates_txt) // 22))
-                    worksheet.write_rich_string(
-                        r, col,
-                        count_fmts[c], f"{entry['count']}\n",
-                        dates_run_fmt, dates_txt,
-                        cell_border_fmt
-                    )
+                    dates_sorted = sorted(entry["dates"], key=lambda t: t[0])
+                    dates_plain = ", ".join(format_date_courte(d) for d, _ in dates_sorted)
+                    max_lignes = max(max_lignes, 1 + (len(dates_plain) // 22))
+                    runs = [count_fmts[c], f"{entry['count']}\n"]
+                    for i, (d, est_anim) in enumerate(dates_sorted):
+                        if i > 0:
+                            runs.extend([dates_run_fmt, ", "])
+                        runs.extend([anim_date_fmt if est_anim else dates_run_fmt,
+                                     normaliser_pdf_text(format_date_courte(d))])
+                    runs.append(cell_border_fmt)
+                    worksheet.write_rich_string(r, col, *runs)
                 else:
                     worksheet.write(r, col, "–", empty_fmt)
             worksheet.write(r, total_col, total_am, total_cell_fmt)
@@ -885,6 +905,54 @@ def _pdf_nb_lignes(pdf, texte, largeur):
             courante = essai
     return lignes
 
+def _pdf_segments_dates(dates_list):
+    """Construit la séquence de segments (texte, est_animateur) pour une liste de tuples
+    (date_iso, est_animateur), triée par date, avec des virgules de séparation en style normal."""
+    segments = []
+    for i, (d, est_anim) in enumerate(sorted(dates_list, key=lambda t: t[0])):
+        if i > 0:
+            segments.append((", ", False))
+        segments.append((format_date_courte(d), est_anim))
+    return segments
+
+def _pdf_wrap_segments(pdf, segments, largeur, taille=7):
+    """Découpe une séquence de segments (texte, est_animateur) en lignes tenant dans `largeur` (mm).
+    Chaque segment retourné porte aussi sa largeur mesurée, pour un centrage précis à l'affichage."""
+    lignes = []
+    ligne_courante = []
+    largeur_courante = 0
+    for txt, est_anim in segments:
+        pdf.set_font("Arial", 'B' if est_anim else 'I', taille)
+        w = pdf.get_string_width(txt)
+        if ligne_courante and largeur_courante + w > largeur - 2:
+            lignes.append(ligne_courante)
+            ligne_courante = []
+            largeur_courante = 0
+        ligne_courante.append((txt, est_anim, w))
+        largeur_courante += w
+    if ligne_courante:
+        lignes.append(ligne_courante)
+    return lignes
+
+def _pdf_dessiner_lignes_mixtes(pdf, x, y, largeur, lignes, hauteur_ligne_texte=3.6, taille=7):
+    """Dessine des lignes de segments mixtes (dates normales en gris italique / date(s) où
+    l'assistante maternelle était animatrice en vert gras), centrées horizontalement."""
+    for idx_ligne, ligne in enumerate(lignes):
+        largeur_totale = sum(w for _, _, w in ligne)
+        x_cur = x + max(0, (largeur - largeur_totale) / 2)
+        y_cur = y + idx_ligne * hauteur_ligne_texte
+        for txt, est_anim, w in ligne:
+            pdf.set_xy(x_cur, y_cur)
+            if est_anim:
+                pdf.set_font("Arial", 'B', taille)
+                pdf.set_text_color(21, 128, 61)
+            else:
+                pdf.set_font("Arial", 'I', taille)
+                pdf.set_text_color(107, 114, 128)
+            pdf.cell(w, hauteur_ligne_texte, txt, border=0, align='L')
+            x_cur += w
+    pdf.set_text_color(0, 0, 0)
+
 def export_stats_couleur_pdf(am_rows, couleurs_utilisees, couleur_lieux, data_am, date_debut, date_fin, statut_filtre):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -917,13 +985,13 @@ def export_stats_couleur_pdf(am_rows, couleurs_utilisees, couleur_lieux, data_am
 
     for nom, prenom, am_id in am_rows:
         # Hauteur de ligne dynamique : dépend du nombre de dates à afficher dans chaque cellule
-        pdf.set_font("Arial", 'I', 7)
         max_lignes_dates = 1
         for c in couleurs_utilisees:
             entry = data_am.get(am_id, {}).get(c)
             if entry and entry["count"] > 0:
-                dates_txt = ", ".join(format_date_courte(d) for d in sorted(entry["dates"]))
-                max_lignes_dates = max(max_lignes_dates, _pdf_nb_lignes(pdf, dates_txt, largeur_couleur))
+                segments = _pdf_segments_dates(entry["dates"])
+                lignes_dates = _pdf_wrap_segments(pdf, segments, largeur_couleur)
+                max_lignes_dates = max(max_lignes_dates, len(lignes_dates))
         hauteur_ligne = 7 + max_lignes_dates * 3.6 + 2
 
         if pdf.get_y() + hauteur_ligne > hauteur_page_max:
@@ -945,18 +1013,16 @@ def export_stats_couleur_pdf(am_rows, couleurs_utilisees, couleur_lieux, data_am
             if entry and entry["count"] > 0:
                 total_am += entry["count"]
                 r, g, b = rgb_couleur_badge(c)
-                dates_txt = ", ".join(format_date_courte(d) for d in sorted(entry["dates"]))
                 pdf.set_font("Arial", 'B', 11)
                 pdf.set_text_color(r, g, b)
                 pdf.cell(largeur_couleur, 6, str(entry["count"]), border='LTR', align='C')
-                pdf.set_xy(x, y_start + 6)
-                pdf.set_font("Arial", 'I', 7)
-                pdf.set_text_color(107, 114, 128)
-                pdf.multi_cell(largeur_couleur, 3.6, normaliser_pdf_text(dates_txt), border='LRB', align='C')
-                # Complète la hauteur restante de la cellule si le texte est plus court que la ligne
-                y_fin_cell = pdf.get_y()
-                if y_fin_cell < y_start + hauteur_ligne:
-                    pdf.rect(x, y_fin_cell, largeur_couleur, y_start + hauteur_ligne - y_fin_cell)
+                # Zone des dates : bordure dessinée en un bloc, texte mixte dessiné par-dessus
+                # (dates normales en gris italique / date(s) où l'AM était animatrice en vert gras)
+                zone_dates_h = hauteur_ligne - 6
+                pdf.rect(x, y_start + 6, largeur_couleur, zone_dates_h)
+                segments = _pdf_segments_dates(entry["dates"])
+                lignes_dates = _pdf_wrap_segments(pdf, segments, largeur_couleur)
+                _pdf_dessiner_lignes_mixtes(pdf, x, y_start + 7, largeur_couleur, lignes_dates)
             else:
                 pdf.set_font("Arial", size=10)
                 pdf.set_text_color(195, 200, 205)
@@ -2185,9 +2251,11 @@ elif menu == "🔐 Administration":
                 couleur_lieux = defaultdict(set)
                 atelier_couleur = {}
                 atelier_date = {}
+                atelier_animateur = {}
                 for a in ateliers:
                     atelier_couleur[a['id']] = a['couleur_calc']
                     atelier_date[a['id']] = a['date_atelier']
+                    atelier_animateur[a['id']] = a.get('animateur_id')
                     couleur_lieux[a['couleur_calc']].add(a['lieu_nom'])
 
                 data_am = defaultdict(lambda: defaultdict(lambda: {"count": 0, "dates": []}))
@@ -2199,7 +2267,8 @@ elif menu == "🔐 Administration":
                     am_id = ins['adherent_id']
                     entry = data_am[am_id][couleur]
                     entry["count"] += 1
-                    entry["dates"].append(atelier_date.get(ins['atelier_id']))
+                    est_animateur = atelier_animateur.get(ins['atelier_id']) == am_id
+                    entry["dates"].append((atelier_date.get(ins['atelier_id']), est_animateur))
                     adherent_info[am_id] = (ins['adherents']['nom'], ins['adherents']['prenom'])
 
                 couleurs_presentes = set()
