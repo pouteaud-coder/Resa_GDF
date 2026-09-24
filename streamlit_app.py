@@ -9,6 +9,7 @@ import re
 import html
 import calendar
 import unicodedata
+from collections import defaultdict
 from urllib.parse import urlencode, quote
 from fpdf import FPDF
 
@@ -70,6 +71,10 @@ st.markdown("""
     .lieu-badge {
         padding: 3px 10px; border-radius: 6px; color: white; font-weight: bold;
         font-size: 0.85rem; display: inline-block; margin: 2px 0;
+    }
+    .couleur-badge {
+        padding: 3px 10px; border-radius: 6px; font-weight: bold;
+        font-size: 0.85rem; display: inline-block; margin: 2px 4px 2px 0;
     }
     .horaire-text { font-size: 0.9rem; color: #2e7d32; font-weight: 400; }
     .compteur-badge {
@@ -156,6 +161,50 @@ def get_color(nom_lieu):
     hash_object = hashlib.md5(str(nom_lieu).upper().strip().encode())
     hue = int(hash_object.hexdigest()[:8], 16) % len(colors)
     return colors[hue]
+
+# --- BADGES DE COULEUR PAR ATELIER ---
+# 6 couleurs au total. Bleu = défaut mercredi, Orange = défaut jeudi.
+# Convention (non imposée techniquement) : une couleur donnée n'est utilisée que pour UN SEUL
+# lieu, mais un même lieu peut avoir plusieurs couleurs (ex : mercredi ET jeudi au même endroit).
+COULEURS_BADGE = {
+    "Bleu":   "#1565c0",
+    "Orange": "#e65100",
+    "Vert":   "#2e7d32",
+    "Violet": "#6a1b9a",
+    "Rouge":  "#c62828",
+    "Jaune":  "#f9a825",
+}
+COULEURS_BADGE_LIST = list(COULEURS_BADGE.keys())
+COULEURS_BADGE_RGB = {
+    "Bleu": (21, 101, 192), "Orange": (230, 81, 0), "Vert": (46, 125, 50),
+    "Violet": (106, 27, 154), "Rouge": (198, 40, 40), "Jaune": (249, 168, 37),
+}
+
+def couleur_badge_defaut(date_atelier):
+    """Bleu le mercredi, Orange le jeudi. Bleu par défaut les autres jours (reste modifiable)."""
+    try:
+        d = date_atelier if isinstance(date_atelier, date) else datetime.strptime(str(date_atelier), '%Y-%m-%d').date()
+    except Exception:
+        return "Bleu"
+    wd = d.weekday()  # 0 = lundi ... 2 = mercredi, 3 = jeudi
+    if wd == 2:
+        return "Bleu"
+    if wd == 3:
+        return "Orange"
+    return "Bleu"
+
+def get_couleur_atelier(at):
+    """Couleur de badge d'un atelier : valeur enregistrée, sinon valeur par défaut selon le jour."""
+    c = at.get('couleur_badge')
+    if c and c in COULEURS_BADGE:
+        return c
+    return couleur_badge_defaut(at.get('date_atelier'))
+
+def hex_couleur_badge(nom_couleur):
+    return COULEURS_BADGE.get(nom_couleur, "#616161")
+
+def rgb_couleur_badge(nom_couleur):
+    return COULEURS_BADGE_RGB.get(nom_couleur, (100, 100, 100))
 
 _JOURS_EMOJI = {
     0: "🔵",   # lundi
@@ -579,23 +628,349 @@ def export_to_pdf(title, data_list):
             pdf.multi_cell(0, 10, txt=normaliser_pdf_text(line))
     return pdf.output(dest='S').encode('latin-1')
 
-def export_stats_pdf(title, data_list, date_debut, date_fin):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
-    pdf.ln(4)
-    pdf.set_font("Arial", 'I', 11)
-    periode_str = f"Periode : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"
-    pdf.cell(0, 8, normaliser_pdf_text(periode_str), ln=True, align='C')
-    pdf.ln(8)
-    pdf.set_font("Arial", size=11)
-    if not data_list:
-        pdf.multi_cell(0, 10, txt=normaliser_pdf_text("Aucune donnee a exporter."))
+# --- STATISTIQUES DE PARTICIPATION (par couleur de badge) ---
+
+def _pdf_output_bytes(pdf):
+    """Retourne les bytes du PDF, compatible avec les deux variantes de la lib FPDF
+    (l'ancienne renvoie une chaîne à encoder, fpdf2 renvoie déjà un bytearray)."""
+    resultat = pdf.output(dest='S')
+    if isinstance(resultat, (bytes, bytearray)):
+        return bytes(resultat)
+    return resultat.encode('latin-1')
+
+def periode_stats_defaut():
+    """Règle de période par défaut pour l'écran Statistiques, basée sur la date du jour :
+    si aujourd'hui est compris entre le 1er août de l'année N et le 15 juillet de l'année N+1,
+    la période par défaut est du 1er septembre N au 15 juillet N+1 (aucun trou possible sur l'année)."""
+    today = date.today()
+    if today >= date(today.year, 8, 1):
+        annee = today.year
     else:
-        for line in data_list:
-            pdf.multi_cell(0, 10, txt=normaliser_pdf_text(line))
-    return pdf.output(dest='S').encode('latin-1')
+        annee = today.year - 1
+    return date(annee, 9, 1), date(annee + 1, 7, 15)
+
+def format_date_courte(iso_str):
+    try:
+        d = datetime.strptime(str(iso_str), '%Y-%m-%d')
+        return d.strftime('%d/%m/%y')
+    except Exception:
+        return str(iso_str)
+
+def _lieux_label_couleur(couleur, couleur_lieux):
+    """Retourne (texte, incoherent) pour le lieu associé à une couleur sur la période."""
+    lieux = sorted(couleur_lieux.get(couleur, set()))
+    if not lieux:
+        return "(aucun atelier)", False
+    if len(lieux) == 1:
+        return lieux[0], False
+    return " / ".join(lieux), True
+
+def rendu_html_stats_couleur(am_rows, couleurs_utilisees, couleur_lieux, data_am):
+    """Construit le tableau HTML : lignes = AM (triées nom de famille), colonnes = couleurs de
+    badge utilisées sur la période (avec le lieu associé en sous-en-tête), cellule = nombre
+    d'inscriptions + toutes les dates. Colonne Total à droite."""
+    css = """
+    <style>
+    .rs-wrap { overflow-x: auto; }
+    .rs-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; background: white; }
+    .rs-table thead th { border: 1px solid #274a6e; padding: 0; min-width: 130px; }
+    .rs-am-th { background: #1b3a5c !important; color: white; text-align: left !important;
+                padding: 8px 8px 8px 12px !important; font-size: 0.75rem; text-transform: uppercase; min-width: 160px; }
+    .rs-color-th { text-align: center; padding: 7px 6px !important; font-weight: 800;
+                   font-size: 0.78rem; text-transform: uppercase; }
+    .rs-total-th { background: #0f2a44 !important; color: white; text-align: center !important;
+                   padding: 8px 6px !important; font-size: 0.75rem; text-transform: uppercase; min-width: 60px; }
+    .rs-lieu-label { background: #f0f3f6 !important; color: #1b3a5c; text-align: left !important;
+                     padding: 5px 12px !important; font-size: 0.7rem; font-weight: 600; text-transform: none; }
+    .rs-lieu { background: rgba(255,255,255,0.94) !important; color: #1b3a5c; font-size: 0.72rem;
+               font-weight: 700; padding: 5px 6px !important; text-align: center; }
+    .rs-lieu.unused { color: #9aa1a8; font-weight: 500; font-style: italic; }
+    .rs-lieu.warn { color: #a12626; }
+    .rs-table tbody td { border: 1px solid #e2e6ea; padding: 7px 8px; vertical-align: top; text-align: center; }
+    .rs-table tbody tr:nth-child(even) { background: #fafbfc; }
+    .rs-am-cell { font-weight: 700; font-size: 0.95rem; color: #1b3a5c !important; text-align: left !important;
+                  white-space: nowrap; }
+    .rs-am-cell .rs-prenom { font-weight: 400; color: #444; }
+    .rs-empty { color: #c3c8cd; }
+    .rs-count { font-weight: 800; font-size: 1.05rem; line-height: 1; display: block; }
+    .rs-dates { font-size: 0.7rem; color: #6b7280; font-style: italic; line-height: 1.3; margin-top: 2px; }
+    .rs-total-cell { font-weight: 800; font-size: 1.05rem; color: #1b3a5c !important; background: #eef3f8 !important; }
+    </style>
+    """
+    parts = [css, '<div class="rs-wrap"><table class="rs-table"><thead><tr>']
+    parts.append('<th class="rs-am-th">Assistante Maternelle</th>')
+    for c in couleurs_utilisees:
+        hexcol = hex_couleur_badge(c)
+        txt_color = "#3a2e00" if c == "Jaune" else "#ffffff"
+        parts.append(f'<th class="rs-color-th" style="background:{hexcol};color:{txt_color};">{html.escape(c)}</th>')
+    parts.append('<th class="rs-total-th">Total</th></tr>')
+
+    parts.append('<tr><th class="rs-lieu-label">Lieu associé →</th>')
+    for c in couleurs_utilisees:
+        txt, incoherent = _lieux_label_couleur(c, couleur_lieux)
+        if txt == "(aucun atelier)":
+            cls = "rs-lieu unused"
+        elif incoherent:
+            txt += " ⚠️"
+            cls = "rs-lieu warn"
+        else:
+            cls = "rs-lieu"
+        parts.append(f'<th class="{cls}">{html.escape(txt)}</th>')
+    parts.append('<th class="rs-total-th" style="background:#eef3f8 !important;"></th></tr></thead><tbody>')
+
+    for nom, prenom, am_id in am_rows:
+        parts.append('<tr>')
+        parts.append(f'<td class="rs-am-cell">{html.escape(nom)} <span class="rs-prenom">{html.escape(prenom)}</span></td>')
+        total_am = 0
+        for c in couleurs_utilisees:
+            entry = data_am.get(am_id, {}).get(c)
+            if entry and entry["count"] > 0:
+                total_am += entry["count"]
+                dates_txt = ", ".join(format_date_courte(d) for d in sorted(entry["dates"]))
+                hexcol = hex_couleur_badge(c)
+                parts.append(f'<td><span class="rs-count" style="color:{hexcol}">{entry["count"]}</span>'
+                             f'<div class="rs-dates">{html.escape(dates_txt)}</div></td>')
+            else:
+                parts.append('<td class="rs-empty">–</td>')
+        parts.append(f'<td class="rs-total-cell">{total_am}</td>')
+        parts.append('</tr>')
+    parts.append('</tbody></table></div>')
+    return "".join(parts)
+
+def export_stats_couleur_excel(am_rows, couleurs_utilisees, couleur_lieux, data_am, date_debut, date_fin, statut_filtre):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        worksheet = workbook.add_worksheet('Statistiques')
+        writer.sheets['Statistiques'] = worksheet
+
+        nb_col_couleurs = len(couleurs_utilisees)
+        total_col = nb_col_couleurs + 1
+
+        title_fmt = workbook.add_format({'bold': True, 'font_size': 13, 'font_color': '#1b3a5c'})
+        periode_str = (f"Statistiques de participation - du {format_date_fr_simple(str(date_debut))} "
+                       f"au {format_date_fr_simple(str(date_fin))} - Ateliers : {statut_filtre}")
+        worksheet.merge_range(0, 0, 0, max(total_col, 1), normaliser_pdf_text(periode_str), title_fmt)
+
+        header_row = 2
+        am_header_fmt = workbook.add_format({'bold': True, 'bg_color': '#1b3a5c', 'font_color': 'white',
+                                              'border': 1, 'align': 'left', 'valign': 'vcenter'})
+        total_header_fmt = workbook.add_format({'bold': True, 'bg_color': '#0f2a44', 'font_color': 'white',
+                                                 'border': 1, 'align': 'center', 'valign': 'vcenter'})
+        worksheet.write(header_row, 0, "Assistante Maternelle", am_header_fmt)
+
+        color_header_fmts = {}
+        for idx, c in enumerate(couleurs_utilisees):
+            col = idx + 1
+            hexcol = hex_couleur_badge(c)
+            font_color = '#3a2e00' if c == 'Jaune' else 'white'
+            fmt = workbook.add_format({'bold': True, 'bg_color': hexcol, 'font_color': font_color,
+                                        'border': 1, 'align': 'center', 'valign': 'vcenter'})
+            worksheet.write(header_row, col, c.upper(), fmt)
+            color_header_fmts[c] = fmt
+        worksheet.write(header_row, total_col, "TOTAL", total_header_fmt)
+
+        sub_row = header_row + 1
+        lieu_label_fmt = workbook.add_format({'italic': True, 'font_size': 9, 'border': 1, 'bg_color': '#eef3f8'})
+        lieu_val_fmt = workbook.add_format({'italic': True, 'font_size': 9, 'border': 1, 'align': 'center',
+                                             'valign': 'vcenter', 'bg_color': '#eef3f8', 'text_wrap': True})
+        worksheet.write(sub_row, 0, "Lieu associé", lieu_label_fmt)
+        for idx, c in enumerate(couleurs_utilisees):
+            col = idx + 1
+            txt, incoherent = _lieux_label_couleur(c, couleur_lieux)
+            if incoherent:
+                txt += " /!\\"
+            worksheet.write(sub_row, col, normaliser_pdf_text(txt), lieu_val_fmt)
+        worksheet.write(sub_row, total_col, "", lieu_val_fmt)
+        worksheet.set_row(sub_row, 30)
+
+        am_fmt = workbook.add_format({'bold': True, 'font_size': 11, 'font_color': '#1b3a5c', 'border': 1, 'valign': 'top'})
+        empty_fmt = workbook.add_format({'align': 'center', 'font_color': '#c3c8cd', 'border': 1, 'valign': 'top'})
+        total_cell_fmt = workbook.add_format({'bold': True, 'font_size': 12, 'font_color': '#1b3a5c',
+                                               'bg_color': '#eef3f8', 'align': 'center', 'border': 1, 'valign': 'top'})
+        cell_border_fmt = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'top', 'text_wrap': True})
+        count_fmts = {c: workbook.add_format({'bold': True, 'font_size': 13, 'font_color': hex_couleur_badge(c)})
+                      for c in couleurs_utilisees}
+        dates_run_fmt = workbook.add_format({'italic': True, 'font_size': 8, 'font_color': '#6b7280'})
+
+        r = sub_row + 1
+        for nom, prenom, am_id in am_rows:
+            worksheet.write(r, 0, normaliser_pdf_text(f"{nom} {prenom}"), am_fmt)
+            total_am = 0
+            max_lignes = 1
+            for idx, c in enumerate(couleurs_utilisees):
+                col = idx + 1
+                entry = data_am.get(am_id, {}).get(c)
+                if entry and entry["count"] > 0:
+                    total_am += entry["count"]
+                    dates_txt = normaliser_pdf_text(", ".join(format_date_courte(d) for d in sorted(entry["dates"])))
+                    max_lignes = max(max_lignes, 1 + (len(dates_txt) // 22))
+                    worksheet.write_rich_string(
+                        r, col,
+                        count_fmts[c], f"{entry['count']}\n",
+                        dates_run_fmt, dates_txt,
+                        cell_border_fmt
+                    )
+                else:
+                    worksheet.write(r, col, "–", empty_fmt)
+            worksheet.write(r, total_col, total_am, total_cell_fmt)
+            worksheet.set_row(r, max(24, 14 * max_lignes))
+            r += 1
+
+        worksheet.set_column(0, 0, 26)
+        if nb_col_couleurs:
+            worksheet.set_column(1, total_col, 22)
+        worksheet.freeze_panes(sub_row + 1, 1)
+    return output.getvalue()
+
+def _pdf_ajuster_taille(pdf, texte, largeur, style='I', taille_max=8, taille_min=5):
+    """Réduit la taille de police jusqu'à ce que le texte tienne sur une seule ligne dans la
+    largeur donnée (marge de 2mm) ; tronque avec '...' si la taille minimale ne suffit toujours pas."""
+    taille = taille_max
+    while taille >= taille_min:
+        pdf.set_font("Arial", style, taille)
+        if pdf.get_string_width(texte) <= largeur - 2:
+            return texte
+        taille -= 1
+    pdf.set_font("Arial", style, taille_min)
+    while texte and pdf.get_string_width(texte + "...") > largeur - 2:
+        texte = texte[:-1]
+    return (texte + "...") if texte else "..."
+
+def _pdf_entete_stats(pdf, largeur_am, largeur_couleur, largeur_total, couleurs_utilisees, couleur_lieux):
+    """Dessine les deux lignes d'en-tête du tableau PDF Statistiques : couleurs, puis lieu associé
+    (taille de police réduite automatiquement si le nom du/des lieu(x) est trop long)."""
+    pdf.set_font("Arial", 'B', 9)
+    pdf.set_fill_color(27, 58, 92)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(largeur_am, 8, normaliser_pdf_text("Assistante Maternelle"), border=1, fill=True)
+    for c in couleurs_utilisees:
+        r, g, b = rgb_couleur_badge(c)
+        pdf.set_fill_color(r, g, b)
+        pdf.set_text_color(58, 44, 0) if c == "Jaune" else pdf.set_text_color(255, 255, 255)
+        pdf.cell(largeur_couleur, 8, normaliser_pdf_text(c.upper()), border=1, align='C', fill=True)
+    pdf.set_fill_color(15, 42, 68)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(largeur_total, 8, "TOTAL", border=1, align='C', fill=True)
+    pdf.ln(8)
+
+    pdf.set_fill_color(238, 243, 248)
+    pdf.set_text_color(27, 58, 92)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(largeur_am, 7, normaliser_pdf_text("Lieu associe"), border=1, fill=True)
+    for c in couleurs_utilisees:
+        txt, incoherent = _lieux_label_couleur(c, couleur_lieux)
+        if incoherent:
+            txt += " !"
+        txt_norm = normaliser_pdf_text(txt)
+        txt_ajuste = _pdf_ajuster_taille(pdf, txt_norm, largeur_couleur, style='I', taille_max=8, taille_min=5)
+        pdf.cell(largeur_couleur, 7, txt_ajuste, border=1, align='C', fill=True)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(largeur_total, 7, "", border=1, fill=True)
+    pdf.ln(7)
+    pdf.set_text_color(0, 0, 0)
+
+def _pdf_nb_lignes(pdf, texte, largeur):
+    if not texte:
+        return 1
+    mots = str(texte).split(' ')
+    lignes = 1
+    courante = ""
+    for mot in mots:
+        essai = (courante + " " + mot).strip()
+        if pdf.get_string_width(essai) > largeur - 2:
+            lignes += 1
+            courante = mot
+        else:
+            courante = essai
+    return lignes
+
+def export_stats_couleur_pdf(am_rows, couleurs_utilisees, couleur_lieux, data_am, date_debut, date_fin, statut_filtre):
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 15)
+    pdf.set_text_color(27, 58, 92)
+    pdf.cell(0, 9, normaliser_pdf_text("Statistiques de participation"), ln=True, align='C')
+    pdf.set_font("Arial", 'I', 10)
+    pdf.set_text_color(80, 80, 80)
+    periode_str = (f"Periode : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))} "
+                   f"- Ateliers : {statut_filtre}")
+    pdf.cell(0, 7, normaliser_pdf_text(periode_str), ln=True, align='C')
+    pdf.ln(3)
+    pdf.set_text_color(0, 0, 0)
+
+    marge = pdf.l_margin
+    largeur_page = 297 - marge - pdf.r_margin
+    largeur_am = 52
+    largeur_total = 20
+    nb_col = len(couleurs_utilisees)
+    largeur_couleur = (largeur_page - largeur_am - largeur_total) / nb_col if nb_col else 0
+
+    _pdf_entete_stats(pdf, largeur_am, largeur_couleur, largeur_total, couleurs_utilisees, couleur_lieux)
+
+    if not am_rows:
+        pdf.set_font("Arial", size=10)
+        pdf.cell(0, 8, normaliser_pdf_text("Aucune inscription sur cette periode."), ln=True)
+        return _pdf_output_bytes(pdf)
+
+    hauteur_page_max = 297 - pdf.b_margin - 10  # A4 paysage : hauteur ~210mm ; marge de sécurité
+
+    for nom, prenom, am_id in am_rows:
+        # Hauteur de ligne dynamique : dépend du nombre de dates à afficher dans chaque cellule
+        pdf.set_font("Arial", 'I', 7)
+        max_lignes_dates = 1
+        for c in couleurs_utilisees:
+            entry = data_am.get(am_id, {}).get(c)
+            if entry and entry["count"] > 0:
+                dates_txt = ", ".join(format_date_courte(d) for d in sorted(entry["dates"]))
+                max_lignes_dates = max(max_lignes_dates, _pdf_nb_lignes(pdf, dates_txt, largeur_couleur))
+        hauteur_ligne = 7 + max_lignes_dates * 3.6 + 2
+
+        if pdf.get_y() + hauteur_ligne > hauteur_page_max:
+            pdf.add_page()
+            _pdf_entete_stats(pdf, largeur_am, largeur_couleur, largeur_total, couleurs_utilisees, couleur_lieux)
+
+        y_start = pdf.get_y()
+        x = marge
+        pdf.set_xy(x, y_start)
+        pdf.set_font("Arial", 'B', 10)
+        pdf.set_text_color(27, 58, 92)
+        pdf.multi_cell(largeur_am, hauteur_ligne, normaliser_pdf_text(f"{nom} {prenom}"), border=1)
+
+        total_am = 0
+        x += largeur_am
+        for c in couleurs_utilisees:
+            entry = data_am.get(am_id, {}).get(c)
+            pdf.set_xy(x, y_start)
+            if entry and entry["count"] > 0:
+                total_am += entry["count"]
+                r, g, b = rgb_couleur_badge(c)
+                dates_txt = ", ".join(format_date_courte(d) for d in sorted(entry["dates"]))
+                pdf.set_font("Arial", 'B', 11)
+                pdf.set_text_color(r, g, b)
+                pdf.cell(largeur_couleur, 6, str(entry["count"]), border='LTR', align='C')
+                pdf.set_xy(x, y_start + 6)
+                pdf.set_font("Arial", 'I', 7)
+                pdf.set_text_color(107, 114, 128)
+                pdf.multi_cell(largeur_couleur, 3.6, normaliser_pdf_text(dates_txt), border='LRB', align='C')
+                # Complète la hauteur restante de la cellule si le texte est plus court que la ligne
+                y_fin_cell = pdf.get_y()
+                if y_fin_cell < y_start + hauteur_ligne:
+                    pdf.rect(x, y_fin_cell, largeur_couleur, y_start + hauteur_ligne - y_fin_cell)
+            else:
+                pdf.set_font("Arial", size=10)
+                pdf.set_text_color(195, 200, 205)
+                pdf.multi_cell(largeur_couleur, hauteur_ligne, "-", border=1, align='C')
+            x += largeur_couleur
+
+        pdf.set_xy(x, y_start)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.set_text_color(27, 58, 92)
+        pdf.multi_cell(largeur_total, hauteur_ligne, str(total_am), border=1, align='C')
+        pdf.set_xy(marge, y_start + hauteur_ligne)
+        pdf.set_text_color(0, 0, 0)
+
+    return _pdf_output_bytes(pdf)
 
 def export_suivi_am_pdf(title, data_triee):
     pdf = FPDF()
@@ -798,7 +1173,7 @@ def super_admin_dialog():
         else: st.error("Code incorrect")
 
 @st.dialog("✏️ Modifier l'atelier")
-def edit_atelier_dialog(at_id, titre_actuel, date_actuelle, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, max_enfants_actuel, lieux_list, horaires_list, map_lieu_id, map_horaire_id):
+def edit_atelier_dialog(at_id, titre_actuel, date_actuelle, lieu_id_actuel, horaire_id_actuel, capacite_actuelle, max_enfants_actuel, lieux_list, horaires_list, map_lieu_id, map_horaire_id, couleur_actuelle=None):
     if not lieux_list:
         st.error("Aucun lieu disponible.")
         return
@@ -823,6 +1198,20 @@ def edit_atelier_dialog(at_id, titre_actuel, date_actuelle, lieu_id_actuel, hora
     nouveau_lieu = st.selectbox("Lieu", options=lieux_options, index=lieux_options.index(lieu_actuel_nom) if lieu_actuel_nom in lieux_options else 0)
     nouvel_horaire = st.selectbox("Horaire", options=horaires_options, index=horaires_options.index(horaire_actuel_lib) if horaire_actuel_lib in horaires_options else 0)
     nouvelle_capacite = st.number_input("Capacité maximale (places totales)", min_value=1, value=int(capacite_actuelle))
+    st.markdown("---")
+    st.markdown("**🎨 Badge de couleur (pour le tri dans les statistiques)**")
+    couleur_par_defaut = couleur_badge_defaut(nouvelle_date)
+    couleur_effective = couleur_actuelle if couleur_actuelle in COULEURS_BADGE else couleur_par_defaut
+    idx_couleur = COULEURS_BADGE_LIST.index(couleur_effective) if couleur_effective in COULEURS_BADGE_LIST else 0
+    nouvelle_couleur = st.selectbox(
+        "Couleur du badge", options=COULEURS_BADGE_LIST, index=idx_couleur,
+        help=f"Par défaut selon le jour de la semaine : {couleur_par_defaut}. Modifiable à tout moment."
+    )
+    st.markdown(
+        f'<span class="couleur-badge" style="background-color:{hex_couleur_badge(nouvelle_couleur)};'
+        f'color:{"#3a2e00" if nouvelle_couleur == "Jaune" else "white"};">{nouvelle_couleur}</span>',
+        unsafe_allow_html=True
+    )
     st.markdown("---")
     st.markdown("**👶 Limite d'enfants pour cet atelier**")
     val_max_enf = max_enfants_actuel if max_enfants_actuel is not None else MAX_ENFANTS_dlg
@@ -852,7 +1241,7 @@ def edit_atelier_dialog(at_id, titre_actuel, date_actuelle, lieu_id_actuel, hora
                 "date_atelier": nouvelle_date.strftime('%Y-%m-%d'),
                 "titre": nouveau_titre if nouveau_titre else None, "lieu_id": nouveau_lieu_id,
                 "horaire_id": nouvel_horaire_id, "capacite_max": nouvelle_capacite,
-                "max_enfants": val_a_stocker
+                "max_enfants": val_a_stocker, "couleur_badge": nouvelle_couleur
             }).eq("id", at_id).execute()
             enregistrer_log("Admin", "Modification atelier", f"Atelier ID {at_id} modifié")
             invalider_cache_inscriptions()
@@ -1407,6 +1796,7 @@ elif menu == "🔐 Administration":
                                 "Titre": "", "Lieu": lieu_val,
                                 "Horaire": horaire_par_defaut if horaire_par_defaut else "",
                                 "Capacité": capa, "Max Enfants": MAX_ENFANTS,
+                                "Couleur": couleur_badge_defaut(curr),
                                 "Actif": False, "Verrouillé": False
                             })
                         curr += timedelta(days=1)
@@ -1420,6 +1810,8 @@ elif menu == "🔐 Administration":
                         column_config={
                             "Lieu": st.column_config.SelectboxColumn(options=l_list, required=False),
                             "Horaire": st.column_config.SelectboxColumn(options=h_list, required=False),
+                            "Couleur": st.column_config.SelectboxColumn(options=COULEURS_BADGE_LIST, required=False,
+                                                                         help="Bleu = défaut mercredi, Orange = défaut jeudi. Modifiable ligne par ligne."),
                             "Actif": st.column_config.CheckboxColumn(default=False),
                             "Verrouillé": st.column_config.CheckboxColumn(default=False)
                         },
@@ -1441,11 +1833,15 @@ elif menu == "🔐 Administration":
                             if not date_iso:
                                 st.error(f"Format de date invalide : {r['Date']}"); st.stop()
                             max_enf_val = int(r.get('Max Enfants', MAX_ENFANTS))
+                            couleur_ligne = r.get('Couleur')
+                            if couleur_ligne not in COULEURS_BADGE:
+                                couleur_ligne = couleur_badge_defaut(date_iso)
                             to_db.append({
                                 "date_atelier": date_iso, "titre": r['Titre'] if r['Titre'] else None,
                                 "lieu_id": map_l_id[lieu_nom], "horaire_id": map_h_id[horaire_lib],
                                 "capacite_max": int(r['Capacité']),
                                 "max_enfants": max_enf_val if max_enf_val > 0 else None,
+                                "couleur_badge": couleur_ligne,
                                 "est_actif": bool(r['Actif']), "est_verrouille": bool(r.get("Verrouillé", False))
                             })
                         if to_db:
@@ -1505,7 +1901,10 @@ elif menu == "🔐 Administration":
 
                     ca, cb, cc, cd, ce, cf_anim = st.columns([0.38, 0.1, 0.1, 0.1, 0.1, 0.22])
                     titre_affiche = a['titre'] if a['titre'] else "(sans titre)"
-                    ca.write(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {titre_affiche} ({a['lieu_nom']}){verrou_icon}{anim_label_rep} | {statut_enfants}")
+                    couleur_rep = get_couleur_atelier(a)
+                    couleur_txt_rep = "#3a2e00" if couleur_rep == "Jaune" else "white"
+                    badge_couleur_rep = f'<span class="couleur-badge" style="background-color:{hex_couleur_badge(couleur_rep)};color:{couleur_txt_rep};">{couleur_rep}</span>'
+                    ca.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {titre_affiche} ({a['lieu_nom']}){verrou_icon}{anim_label_rep} | {statut_enfants} {badge_couleur_rep}", unsafe_allow_html=True)
 
                     if cb.button("🔴 Désactiver" if a['est_actif'] else "🟢 Activer", key=f"at_stat_{a['id']}"):
                         supabase.table("ateliers").update({"est_actif": not a['est_actif']}).eq("id", a['id']).execute()
@@ -1517,7 +1916,7 @@ elif menu == "🔐 Administration":
                         enregistrer_log("Admin", "Verrouillage atelier", f"Atelier '{titre_log}' {'verrouillé' if nouvel_etat else 'déverrouillé'}")
                         invalider_cache_inscriptions(); st.rerun()
                     if cd.button("✏️", key=f"at_edit_{a['id']}"):
-                        edit_atelier_dialog(a['id'], a['titre'], a['date_atelier'], a['lieu_id'], a['horaire_id'], a['capacite_max'], a.get('max_enfants'), l_raw, h_raw, map_l_id, map_h_id)
+                        edit_atelier_dialog(a['id'], a['titre'], a['date_atelier'], a['lieu_id'], a['horaire_id'], a['capacite_max'], a.get('max_enfants'), l_raw, h_raw, map_l_id, map_h_id, couleur_actuelle=a.get('couleur_badge'))
                     if ce.button("🗑️", key=f"at_del_{a['id']}"):
                         cnt = len(cache_ins_rep.get(a['id'], []))
                         delete_atelier_dialog(a['id'], a['titre'], cnt > 0)
@@ -1750,66 +2149,94 @@ elif menu == "🔐 Administration":
 
     # ---- T4 : STATISTIQUES ----
     with t4:
-        st.subheader("📈 Statistiques de participation par lieu")
-        cs1, cs2 = st.columns(2)
-        ds_stat = cs1.date_input("Date début", date.today().replace(day=1), key="stat_d1", format="DD/MM/YYYY")
-        de_stat = cs2.date_input("Date fin", date.today(), key="stat_d2", format="DD/MM/YYYY")
+        st.subheader("📈 Statistiques de participation")
 
-        ateliers_bruts = get_ateliers_periode(str(ds_stat), str(de_stat))
+        defaut_debut, defaut_fin = periode_stats_defaut()
+        cs1, cs2 = st.columns(2)
+        ds_stat = cs1.date_input("Date début (date de l'atelier)", defaut_debut, key="stat_d1", format="DD/MM/YYYY")
+        de_stat = cs2.date_input("Date fin (date de l'atelier)", defaut_fin, key="stat_d2", format="DD/MM/YYYY")
+
+        st.markdown("**Filtrer les ateliers par statut :**")
+        if "stat_statut_filtre" not in st.session_state:
+            st.session_state["stat_statut_filtre"] = "Actifs"
+        cf1, cf2, cf3, cf_rest = st.columns([1, 1, 1, 5])
+        for col_f, opt in zip([cf1, cf2, cf3], ["Actifs", "Inactifs", "Tous"]):
+            with col_f:
+                if st.button(opt, key=f"stat_filtre_{opt}", use_container_width=True,
+                             type="primary" if st.session_state["stat_statut_filtre"] == opt else "secondary"):
+                    st.session_state["stat_statut_filtre"] = opt; st.rerun()
+        st.caption(f"Filtre actif : **{st.session_state['stat_statut_filtre']}**")
+        statut_filtre_stat = st.session_state["stat_statut_filtre"]
+        actif_filter_stat = None if statut_filtre_stat == "Tous" else statut_filtre_stat
+
+        ateliers_bruts = get_ateliers_periode(str(ds_stat), str(de_stat), actif_filter_stat)
         if not ateliers_bruts:
             st.info("ℹ️ Aucun atelier sur cette période.")
         else:
             ateliers = enrichir_ateliers([dict(a) for a in ateliers_bruts], lieux_dict_global, horaires_dict_global)
+            for a in ateliers:
+                a['couleur_calc'] = get_couleur_atelier(a)
             at_ids = tuple(a['id'] for a in ateliers)
             toutes_ins = get_toutes_inscriptions_ateliers(at_ids)
 
             if not toutes_ins:
                 st.info("Aucune inscription sur cette période.")
             else:
-                from collections import defaultdict
-                lieux_periode = sorted(set(a['lieu_nom'] for a in ateliers))
-                atelier_lieu = {a['id']: a['lieu_nom'] for a in ateliers}
-                compteur = defaultdict(lambda: defaultdict(int))
+                couleur_lieux = defaultdict(set)
+                atelier_couleur = {}
+                atelier_date = {}
+                for a in ateliers:
+                    atelier_couleur[a['id']] = a['couleur_calc']
+                    atelier_date[a['id']] = a['date_atelier']
+                    couleur_lieux[a['couleur_calc']].add(a['lieu_nom'])
+
+                data_am = defaultdict(lambda: defaultdict(lambda: {"count": 0, "dates": []}))
+                adherent_info = {}
                 for ins in toutes_ins:
-                    am_nom = f"{ins['adherents']['prenom']} {ins['adherents']['nom']}"
-                    lieu = atelier_lieu.get(ins['atelier_id'], '?')
-                    compteur[am_nom][lieu] += 1
+                    couleur = atelier_couleur.get(ins['atelier_id'])
+                    if not couleur:
+                        continue
+                    am_id = ins['adherent_id']
+                    entry = data_am[am_id][couleur]
+                    entry["count"] += 1
+                    entry["dates"].append(atelier_date.get(ins['atelier_id']))
+                    adherent_info[am_id] = (ins['adherents']['nom'], ins['adherents']['prenom'])
 
-                data_rows = []
-                for am in sorted(compteur.keys()):
-                    row = {"Assistante Maternelle": am}
-                    total = 0
-                    for lieu in lieux_periode:
-                        nb = compteur[am].get(lieu, 0)
-                        row[lieu] = nb
-                        total += nb
-                    row["Total"] = total
-                    data_rows.append(row)
+                couleurs_presentes = set()
+                for d in data_am.values():
+                    couleurs_presentes.update(d.keys())
+                # Seules les couleurs comportant au moins une inscription sur la période sont affichées
+                couleurs_utilisees = [c for c in COULEURS_BADGE_LIST if c in couleurs_presentes]
 
-                df_stats = pd.DataFrame(data_rows).sort_values("Total", ascending=False).reset_index(drop=True)
+                am_rows = sorted(
+                    [(nom, prenom, am_id) for am_id, (nom, prenom) in adherent_info.items()],
+                    key=lambda x: (x[0].upper(), x[1].upper())
+                )
 
-                styled_df = df_stats.style.set_properties(**{'background-color': 'white', 'color': 'black'}).set_table_styles([
-                    {'selector': 'th', 'props': [('background-color', '#f0f0f0'), ('color', 'black'), ('font-weight', 'bold'), ('text-align', 'center')]},
-                    {'selector': 'td', 'props': [('text-align', 'center')]},
-                    {'selector': 'td:first-child', 'props': [('text-align', 'left')]},
-                    {'selector': 'th:first-child', 'props': [('text-align', 'left')]},
-                    {'selector': 'table', 'props': [('width', '100%'), ('border-collapse', 'collapse')]},
-                    {'selector': 'td, th', 'props': [('padding', '8px'), ('border', '1px solid #ddd')]}
-                ]).hide(axis='index')
-                st.markdown(styled_df.to_html(), unsafe_allow_html=True)
+                if not couleurs_utilisees or not am_rows:
+                    st.info("Aucune inscription sur cette période.")
+                else:
+                    incoherences = [c for c in couleurs_utilisees if _lieux_label_couleur(c, couleur_lieux)[1]]
+                    if incoherences:
+                        st.warning(f"⚠️ Couleur(s) utilisée(s) pour plusieurs lieux différents sur cette période : {', '.join(incoherences)}.")
 
-                total_inscr = df_stats["Total"].sum()
-                st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
-                st.markdown(f"**Nombre d'ateliers proposés sur la période :** {len(at_ids)}")
+                    st.markdown(rendu_html_stats_couleur(am_rows, couleurs_utilisees, couleur_lieux, data_am), unsafe_allow_html=True)
 
-                st.download_button("📥 Excel Statistiques", data=export_to_excel_with_period(df_stats, ds_stat, de_stat, "Statistiques par lieu"), file_name=f"stats_lieu_{ds_stat}_{de_stat}.xlsx", key="stat_excel")
+                    total_inscr = sum(v["count"] for d in data_am.values() for v in d.values())
+                    st.markdown(f"**Total des inscriptions sur la période :** {total_inscr}")
+                    st.markdown(f"**Nombre d'ateliers sur la période :** {len(at_ids)}")
 
-                pdf_lines = [f"Periode : du {format_date_fr_simple(str(ds_stat))} au {format_date_fr_simple(str(de_stat))}", ""]
-                for _, row in df_stats.iterrows():
-                    details = ", ".join([f"{lieu} ({row[lieu]})" for lieu in lieux_periode if row[lieu] > 0])
-                    pdf_lines.append(f"{row['Assistante Maternelle']} : Total {row['Total']}" + (f" - {details}" if details else ""))
-                pdf_lines += ["", f"Total inscriptions : {total_inscr}", f"Nombre d'ateliers : {len(at_ids)}"]
-                st.download_button("📥 PDF Statistiques", data=export_stats_pdf("Statistiques de participation par lieu", pdf_lines, ds_stat, de_stat), file_name=f"stats_lieu_{ds_stat}_{de_stat}.pdf", key="stat_pdf")
+                    cex1, cex2 = st.columns(2)
+                    cex1.download_button(
+                        "📥 Excel Statistiques",
+                        data=export_stats_couleur_excel(am_rows, couleurs_utilisees, couleur_lieux, data_am, ds_stat, de_stat, statut_filtre_stat),
+                        file_name=f"stats_participation_{ds_stat}_{de_stat}.xlsx", key="stat_excel"
+                    )
+                    cex2.download_button(
+                        "📥 PDF Statistiques",
+                        data=export_stats_couleur_pdf(am_rows, couleurs_utilisees, couleur_lieux, data_am, ds_stat, de_stat, statut_filtre_stat),
+                        file_name=f"stats_participation_{ds_stat}_{de_stat}.pdf", key="stat_pdf"
+                    )
 
     # ---- T5 : LISTE AM ----
     with t5:
