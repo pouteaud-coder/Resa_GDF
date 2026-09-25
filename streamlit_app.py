@@ -167,17 +167,17 @@ def get_color(nom_lieu):
 # Convention (non imposée techniquement) : une couleur donnée n'est utilisée que pour UN SEUL
 # lieu, mais un même lieu peut avoir plusieurs couleurs (ex : mercredi ET jeudi au même endroit).
 COULEURS_BADGE = {
-    "Bleu":   "#1565c0",
-    "Orange": "#e65100",
-    "Vert":   "#2e7d32",
-    "Violet": "#6a1b9a",
-    "Rouge":  "#c62828",
-    "Jaune":  "#f9a825",
+    "Bleu":    "#1565c0",
+    "Orange":  "#e65100",
+    "Vert":    "#2e7d32",
+    "Violet":  "#6a1b9a",
+    "Rouge":   "#c62828",
+    "Magenta": "#ad1457",
 }
 COULEURS_BADGE_LIST = list(COULEURS_BADGE.keys())
 COULEURS_BADGE_RGB = {
     "Bleu": (21, 101, 192), "Orange": (230, 81, 0), "Vert": (46, 125, 50),
-    "Violet": (106, 27, 154), "Rouge": (198, 40, 40), "Jaune": (249, 168, 37),
+    "Violet": (106, 27, 154), "Rouge": (198, 40, 40), "Magenta": (173, 20, 87),
 }
 
 def couleur_badge_defaut(date_atelier):
@@ -710,8 +710,7 @@ def rendu_html_stats_couleur(am_rows, couleurs_utilisees, couleur_lieux, data_am
     parts.append('<th class="rs-am-th">Assistante Maternelle</th>')
     for c in couleurs_utilisees:
         hexcol = hex_couleur_badge(c)
-        txt_color = "#3a2e00" if c == "Jaune" else "#ffffff"
-        parts.append(f'<th class="rs-color-th" style="background:{hexcol};color:{txt_color};">{html.escape(c)}</th>')
+        parts.append(f'<th class="rs-color-th" style="background:{hexcol};color:#ffffff;">{html.escape(c)}</th>')
     parts.append('<th class="rs-total-th">Total</th></tr>')
 
     parts.append('<tr><th class="rs-lieu-label">Lieu associé →</th>')
@@ -779,8 +778,7 @@ def export_stats_couleur_excel(am_rows, couleurs_utilisees, couleur_lieux, data_
         for idx, c in enumerate(couleurs_utilisees):
             col = idx + 1
             hexcol = hex_couleur_badge(c)
-            font_color = '#3a2e00' if c == 'Jaune' else 'white'
-            fmt = workbook.add_format({'bold': True, 'bg_color': hexcol, 'font_color': font_color,
+            fmt = workbook.add_format({'bold': True, 'bg_color': hexcol, 'font_color': 'white',
                                         'border': 1, 'align': 'center', 'valign': 'vcenter'})
             worksheet.write(header_row, col, c.upper(), fmt)
             color_header_fmts[c] = fmt
@@ -867,7 +865,7 @@ def _pdf_entete_stats(pdf, largeur_am, largeur_couleur, largeur_total, couleurs_
     for c in couleurs_utilisees:
         r, g, b = rgb_couleur_badge(c)
         pdf.set_fill_color(r, g, b)
-        pdf.set_text_color(58, 44, 0) if c == "Jaune" else pdf.set_text_color(255, 255, 255)
+        pdf.set_text_color(255, 255, 255)
         pdf.cell(largeur_couleur, 8, normaliser_pdf_text(c.upper()), border=1, align='C', fill=True)
     pdf.set_fill_color(15, 42, 68)
     pdf.set_text_color(255, 255, 255)
@@ -1275,7 +1273,7 @@ def edit_atelier_dialog(at_id, titre_actuel, date_actuelle, lieu_id_actuel, hora
     )
     st.markdown(
         f'<span class="couleur-badge" style="background-color:{hex_couleur_badge(nouvelle_couleur)};'
-        f'color:{"#3a2e00" if nouvelle_couleur == "Jaune" else "white"};">{nouvelle_couleur}</span>',
+        f'color:white;">{nouvelle_couleur}</span>',
         unsafe_allow_html=True
     )
     st.markdown("---")
@@ -1565,12 +1563,14 @@ elif menu == "📝 Inscriptions":
                     emoji = get_weekday_emoji(at['date_atelier'])
                     titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
                     
-                    # Indicateur si l'utilisateur principal est déjà inscrit
+                    # Indicateur si l'utilisateur principal est déjà inscrit / est l'animateur de cet atelier
                     id_user_principal = dict_adh.get(user_principal)
                     est_inscrit = any(i['adherent_id'] == id_user_principal for i in ins_data) if id_user_principal else False
                     indicateur_inscrit = " ✔️" if est_inscrit else ""
-                    
-                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{indicateur_inscrit}"
+                    est_animateur_ici = bool(id_user_principal) and id_user_principal == anim_id_at
+                    indicateur_animateur = " ⭐" if est_animateur_ici else ""
+
+                    titre_label = f"{emoji} {format_date_fr_complete(at['date_atelier'])} — {titre_affiche} | 📍 {at['lieu_nom']} | ⏰ {at['horaire_lib']} | {statut_enfants}{indicateur_inscrit}{indicateur_animateur}"
                     
                     with st.expander(titre_label):
                         if is_verrouille(at):
@@ -1697,7 +1697,10 @@ elif menu == "📊 Suivi & Récap":
                     at = i['ateliers']
                     c_l = get_color(at['lieu_nom'])
                     titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
-                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
+                    c_at = hex_couleur_badge(get_couleur_atelier(at))
+                    icone_anim = "⭐ " if i.get('adherent_id') == at.get('animateur_id') else ""
+                    date_html = f"{icone_anim}<span style='color:{c_at};font-weight:800;'>{format_date_fr_complete(at['date_atelier'], gras=False)}</span>"
+                    st.write(f"{date_html} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
                     btn_agenda = bouton_agenda_html(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'])
                     ics_data = fichier_ics_atelier(at['date_atelier'], at['horaire_lib'], at['titre'], at['lieu_nom'], at['id'])
                     col_g, col_i, _ = st.columns([0.16, 0.34, 0.50])
@@ -1754,7 +1757,9 @@ elif menu == "📊 Suivi & Récap":
                 if restantes < 0:
                     statut_enfants += " ⚠️ Salle saturée"
 
-                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['titre'] if a['titre'] else '(sans titre)'} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
+                c_at_pl = hex_couleur_badge(get_couleur_atelier(a))
+                date_html_pl = f"<span style='color:{c_at_pl};font-weight:800;'>{format_date_fr_complete(a['date_atelier'], gras=False)}</span>"
+                st.markdown(f"{date_html_pl} | {a['titre'] if a['titre'] else '(sans titre)'} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span> <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
 
                 if ins_at:
                     anim_ins = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
@@ -1968,8 +1973,7 @@ elif menu == "🔐 Administration":
                     ca, cb, cc, cd, ce, cf_anim = st.columns([0.38, 0.1, 0.1, 0.1, 0.1, 0.22])
                     titre_affiche = a['titre'] if a['titre'] else "(sans titre)"
                     couleur_rep = get_couleur_atelier(a)
-                    couleur_txt_rep = "#3a2e00" if couleur_rep == "Jaune" else "white"
-                    badge_couleur_rep = f'<span class="couleur-badge" style="background-color:{hex_couleur_badge(couleur_rep)};color:{couleur_txt_rep};">{couleur_rep}</span>'
+                    badge_couleur_rep = f'<span class="couleur-badge" style="background-color:{hex_couleur_badge(couleur_rep)};color:white;">{couleur_rep}</span>'
                     ca.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {a['horaire_lib']} | {titre_affiche} ({a['lieu_nom']}){verrou_icon}{anim_label_rep} | {statut_enfants} {badge_couleur_rep}", unsafe_allow_html=True)
 
                     if cb.button("🔴 Désactiver" if a['est_actif'] else "🟢 Activer", key=f"at_stat_{a['id']}"):
@@ -2057,7 +2061,10 @@ elif menu == "🔐 Administration":
                     at = i['ateliers']
                     c_l = get_color(at['lieu_nom'])
                     titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
-                    st.write(f"{format_date_fr_complete(at['date_atelier'], gras=True)} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
+                    c_at_adm = hex_couleur_badge(get_couleur_atelier(at))
+                    icone_anim_adm = "⭐ " if i.get('adherent_id') == at.get('animateur_id') else ""
+                    date_html_adm = f"{icone_anim_adm}<span style='color:{c_at_adm};font-weight:800;'>{format_date_fr_complete(at['date_atelier'], gras=False)}</span>"
+                    st.write(f"{date_html_adm} — {titre_affiche} <span class='lieu-badge' style='background-color:{c_l}'>{at['lieu_nom']}</span> <span class='horaire-text'>({at['horaire_lib']})</span> **({i['nb_enfants']} enf.)**", unsafe_allow_html=True)
             else:
                 st.info("Aucune inscription trouvée.")
 
@@ -2123,8 +2130,13 @@ elif menu == "🔐 Administration":
                         anim_nom_plan = f"{anim_adh_plan['prenom']} {anim_adh_plan['nom']}"
                 anim_label_plan = f" | ⭐ {anim_nom_plan}" if anim_nom_plan else ""
 
-                titre_affiche = a['titre'] if a['titre'] else "(sans titre)"    
-                st.markdown(f"**{format_date_fr_complete(a['date_atelier'])}** | {titre_affiche} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
+                titre_affiche = a['titre'] if a['titre'] else "(sans titre)"
+                c_at_admp = hex_couleur_badge(get_couleur_atelier(a))
+                date_html_admp = f"<span style='color:{c_at_admp};font-weight:800;'>{format_date_fr_complete(a['date_atelier'], gras=False)}</span>"
+                st.markdown(f"{date_html_admp} | {titre_affiche} | <span class='lieu-badge' style='background-color:{c_l}'>{a['lieu_nom']}</span> | <span class='horaire-text'>{a['horaire_lib']}</span>{verrou_icon}{anim_label_plan} <span class='compteur-badge'>👤 {t_ad} AM</span> <span class='compteur-badge'>👶 {t_en} enf.</span> <span class='compteur-badge'>{statut_enfants}</span>", unsafe_allow_html=True)
+
+                if st.button("✏️ Modifier l'atelier", key=f"plan_edit_{a['id']}"):
+                    edit_atelier_dialog(a['id'], a['titre'], a['date_atelier'], a['lieu_id'], a['horaire_id'], a['capacite_max'], a.get('max_enfants'), l_raw, h_raw, map_l_id, map_h_id, couleur_actuelle=a.get('couleur_badge'))
 
                 if ins_at:
                     anim_ins_plan = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
