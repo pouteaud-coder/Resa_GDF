@@ -1940,7 +1940,9 @@ elif menu == "📊 Suivi & Récap":
         col_t1, col_t2, col_t_rest = st.columns([1, 1, 3])
         for col_t, opt in zip([col_t1, col_t2], options_tri_pr):
             with col_t:
-                if st.button(opt, key=f"tri_pr_{opt}", use_container_width=True, type="primary" if st.session_state["tri_places_restantes"] == opt else "secondary"):
+                actif_tri = st.session_state["tri_places_restantes"] == opt
+                label_tri = f"✅ {opt}" if actif_tri else opt
+                if st.button(label_tri, key=f"tri_pr_{opt}", use_container_width=True, type="primary" if actif_tri else "secondary"):
                     st.session_state["tri_places_restantes"] = opt; st.rerun()
         st.caption(f"Tri actif : **{st.session_state['tri_places_restantes']}**")
         tri_pr_choisi = st.session_state["tri_places_restantes"]
@@ -2309,8 +2311,13 @@ elif menu == "🔐 Administration":
         d_s_a = c1_adm.date_input("Du", date.today(), key="adm_plan_d1", format="DD/MM/YYYY")
         d_e_a = c2_adm.date_input("Au", ajouter_mois(date.today(), 12), key="adm_plan_d2", format="DD/MM/YYYY")
 
+        filtre_couleurs_plan = st.multiselect("Filtrer par couleur d'atelier :", COULEURS_BADGE_LIST, key="plan_filtre_couleurs")
+
         ateliers_bruts = get_ateliers_periode(str(d_s_a), str(d_e_a), filtre_statut_plan)
         ateliers = enrichir_ateliers([dict(a) for a in ateliers_bruts], lieux_dict_global, horaires_dict_global)
+
+        if filtre_couleurs_plan:
+            ateliers = [a for a in ateliers if get_couleur_atelier(a) in filtre_couleurs_plan]
 
         at_ids = tuple(a['id'] for a in ateliers)
         toutes_ins = get_toutes_inscriptions_ateliers(at_ids)
