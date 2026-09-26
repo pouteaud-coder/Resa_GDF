@@ -368,6 +368,11 @@ def get_max_enfants_atelier(at, default_max):
 def normaliser_pdf_text(texte):
     if not isinstance(texte, str):
         texte = str(texte)
+    # Ligatures non décomposées par NFKD (seraient sinon supprimées silencieusement
+    # par l'encodage ascii ci-dessous, ex. "Cœur" -> "Cur") : à transcrire AVANT la
+    # normalisation Unicode.
+    for src, dst in (('œ', 'oe'), ('Œ', 'OE'), ('æ', 'ae'), ('Æ', 'AE')):
+        texte = texte.replace(src, dst)
     # Normalisation Unicode : supprime les accents et diacritiques
     texte = unicodedata.normalize('NFKD', texte).encode('ascii', 'ignore').decode('ascii')
     # Remplacements des caractères non couverts par NFKD
@@ -1170,9 +1175,16 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, cache_ins_dic
 
 # --- PLACES RESTANTES (regroupement par lieu, ateliers non complets) ---
 
-def export_places_restantes_pdf(title, lignes_par_lieu, date_debut, date_fin):
-    """PDF A4 portrait (format par défaut de FPDF) : un bloc par lieu, lignes triées par
-    places restantes décroissantes, date colorée selon le badge de l'atelier."""
+def export_places_restantes_pdf(title, lignes_par_lieu, date_debut, date_fin, tri="places"):
+    """PDF A4 portrait (format par défaut de FPDF) : un bloc par lieu, date colorée selon le
+    badge de l'atelier. 'tri' contrôle l'ordre des lignes dans chaque bloc lieu, et doit
+    correspondre à ce qui est affiché à l'écran :
+      - "places" (défaut) : places restantes décroissantes
+      - "date"            : date croissante
+    Colonne date large de 58mm (mesure empirique avec fpdf2 : la date française la plus
+    longue en Arial/Helvetica gras 10pt, ex. "  Dimanche 22 septembre 2026", fait environ
+    51.4mm ; 58mm laisse une marge de sécurité pour éviter tout chevauchement avec le titre,
+    ce qui corrige le bug remonté où le texte de la date empiétait sur le titre suivant)."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
@@ -1189,7 +1201,10 @@ def export_places_restantes_pdf(title, lignes_par_lieu, date_debut, date_fin):
         return _pdf_output_bytes(pdf)
 
     for lieu_nom in sorted(lignes_par_lieu.keys()):
-        lignes = sorted(lignes_par_lieu[lieu_nom], key=lambda a: a["_places_restantes"], reverse=True)
+        if tri == "date":
+            lignes = sorted(lignes_par_lieu[lieu_nom], key=lambda a: a['date_atelier'])
+        else:
+            lignes = sorted(lignes_par_lieu[lieu_nom], key=lambda a: a["_places_restantes"], reverse=True)
         pdf.set_fill_color(27, 58, 92)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Arial", 'B', 12)
@@ -1201,7 +1216,7 @@ def export_places_restantes_pdf(title, lignes_par_lieu, date_debut, date_fin):
             r, g, b = rgb_couleur_badge(get_couleur_atelier(a))
             pdf.set_font("Arial", 'B', 10)
             pdf.set_text_color(r, g, b)
-            pdf.cell(42, 7, normaliser_pdf_text(f"  {date_fr}"), border=0)
+            pdf.cell(58, 7, normaliser_pdf_text(f"  {date_fr}"), border=0)
             pdf.set_text_color(0, 0, 0)
             pdf.set_font("Arial", size=10)
             unite = "place restante" if a["_places_restantes"] == 1 else "places restantes"
@@ -1916,7 +1931,19 @@ elif menu == "📊 Suivi & Récap":
             st.info("Aucun atelier trouvé sur cette période.")
 
     with t3:
-        st.markdown("Ateliers **non complets**, regroupés par lieu, triés par nombre de places restantes décroissant.")
+        st.markdown("Ateliers **non complets**, regroupés par lieu. Par défaut, tous les lieux et toutes les couleurs sont inclus (aucun filtre appliqué).")
+
+        st.markdown("**Trier par :**")
+        options_tri_pr = ("Places restantes (décroissant)", "Date (croissant)")
+        if "tri_places_restantes" not in st.session_state:
+            st.session_state["tri_places_restantes"] = options_tri_pr[0]
+        col_t1, col_t2, col_t_rest = st.columns([1, 1, 3])
+        for col_t, opt in zip([col_t1, col_t2], options_tri_pr):
+            with col_t:
+                if st.button(opt, key=f"tri_pr_{opt}", use_container_width=True, type="primary" if st.session_state["tri_places_restantes"] == opt else "secondary"):
+                    st.session_state["tri_places_restantes"] = opt; st.rerun()
+        st.caption(f"Tri actif : **{st.session_state['tri_places_restantes']}**")
+        tri_pr_choisi = st.session_state["tri_places_restantes"]
 
         noms_lieux_dispo = sorted([l['nom'] for l in lieux_actifs])
         cf1, cf2 = st.columns(2)
@@ -1953,7 +1980,8 @@ elif menu == "📊 Suivi & Récap":
             a_avec_places["_places_restantes"] = places_restantes_pr
             lignes_par_lieu_pr.setdefault(a['lieu_nom'], []).append(a_avec_places)
 
-        pdf_places_restantes = export_places_restantes_pdf("Places restantes", lignes_par_lieu_pr, str(d_s_pr), str(d_e_pr))
+        tri_pdf_pr = "date" if tri_pr_choisi == "Date (croissant)" else "places"
+        pdf_places_restantes = export_places_restantes_pdf("Places restantes", lignes_par_lieu_pr, str(d_s_pr), str(d_e_pr), tri=tri_pdf_pr)
         st.download_button("📥 PDF Places restantes", data=pdf_places_restantes, file_name="places_restantes.pdf", key="exp_pr_pdf")
 
         if not lignes_par_lieu_pr:
@@ -1961,7 +1989,10 @@ elif menu == "📊 Suivi & Récap":
         else:
             for lieu_nom_pr in sorted(lignes_par_lieu_pr.keys()):
                 st.markdown(f"<div style='background-color:#1b3a5c;color:white;font-weight:700;padding:7px 14px;border-radius:8px;margin:16px 0 8px 0;'>{lieu_nom_pr}</div>", unsafe_allow_html=True)
-                lignes_pr = sorted(lignes_par_lieu_pr[lieu_nom_pr], key=lambda a: a["_places_restantes"], reverse=True)
+                if tri_pr_choisi == "Date (croissant)":
+                    lignes_pr = sorted(lignes_par_lieu_pr[lieu_nom_pr], key=lambda a: a['date_atelier'])
+                else:
+                    lignes_pr = sorted(lignes_par_lieu_pr[lieu_nom_pr], key=lambda a: a["_places_restantes"], reverse=True)
                 for a in lignes_pr:
                     c_at_pr = hex_couleur_badge(get_couleur_atelier(a))
                     date_html_pr = f"<span style='color:{c_at_pr};font-weight:800;'>{format_date_fr_complete(a['date_atelier'], gras=False)}</span>"
