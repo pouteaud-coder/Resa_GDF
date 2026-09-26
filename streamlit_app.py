@@ -2367,13 +2367,17 @@ elif menu == "🔐 Administration":
                 if st.button("✏️ Modifier l'atelier", key=f"plan_edit_{a['id']}"):
                     edit_atelier_dialog(a['id'], a['titre'], a['date_atelier'], a['lieu_id'], a['horaire_id'], a['capacite_max'], a.get('max_enfants'), l_raw, h_raw, map_l_id, map_h_id, couleur_actuelle=a.get('couleur_badge'))
 
+                if not anim_id_at and liste_adh_anim:
+                    if st.button("⭐ Assigner anim.", key=f"adm_anim_set_{a['id']}"):
+                        dialog_attribuer_animateur(a['id'], a['titre'], None, None, liste_adh_anim, dict_adh_anim, auteur="Admin")
+
                 if ins_at:
                     anim_ins_plan = next((p for p in ins_at if p['adherent_id'] == anim_id_at), None) if anim_id_at else None
                     autres_plan_tries = sorted([p for p in ins_at if p['adherent_id'] != anim_id_at], key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
 
                     if anim_ins_plan:
                         n_a = f"{anim_ins_plan['adherents']['prenom']} {anim_ins_plan['adherents']['nom']}"
-                        ca1, ca2, ca3, ca4 = st.columns([0.42, 0.18, 0.18, 0.22])
+                        ca1, ca2, ca3, ca4, ca5 = st.columns([0.32, 0.14, 0.16, 0.19, 0.19])
                         ca1.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
                         new_nb_a = ca2.number_input("Enf.", 0, 10, int(anim_ins_plan['nb_enfants']), key=f"adm_anim_nb_{anim_ins_plan['id']}", label_visibility="collapsed")
                         if ca3.button("✏️ Modifier", key=f"adm_anim_mod_{anim_ins_plan['id']}"):
@@ -2388,7 +2392,9 @@ elif menu == "🔐 Administration":
                                 enregistrer_log("Admin", "Modification nb enf. animateur", f"{n_a} → {new_nb_a} enf. - {at_info_log}")
                                 invalider_cache_inscriptions()
                                 st.rerun()
-                        if ca4.button("❌ Retirer anim.", key=f"adm_anim_del_{a['id']}"):
+                        if ca4.button("⭐ Changer anim.", key=f"adm_anim_chg_{a['id']}"):
+                            dialog_attribuer_animateur(a['id'], a['titre'], anim_id_at, n_a, liste_adh_anim, dict_adh_anim, auteur="Admin")
+                        if ca5.button("❌ Retirer anim.", key=f"adm_anim_del_{a['id']}"):
                             dialog_retirer_animateur(a['id'], a['titre'], anim_id_at, n_a, "Admin")
 
                     for p in autres_plan_tries:
