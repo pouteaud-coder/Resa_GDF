@@ -45,11 +45,11 @@ check_access()
 
 # --- TITRE DE L'APPLICATION ---
 st.markdown("""
-    <div style="display: flex; align-items: center; background-color: #e6f4ff; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 1px solid #a8cfe8;">
-        <div style="font-size: 3.5rem; margin-right: 20px;">🖼️</div>
+    <div class="app-header" style="display: flex; align-items: center; background-color: #e6f4ff; padding: 20px; border-radius: 15px; margin-bottom: 25px; border: 1px solid #a8cfe8;">
+        <div class="app-header-emoji" style="font-size: 3.5rem; margin-right: 20px;">🖼️</div>
         <div>
-            <h1 style="color: #1b5e20; margin: 0;">Résa GDF</h1>
-            <p style="margin: 0; color: #0a3d0a; font-weight: bold;">Ateliers d'éveil & Activités manuelles</p>
+            <h1 class="app-header-title" style="color: #1b5e20; margin: 0;">Résa GDF</h1>
+            <p class="app-header-subtitle" style="margin: 0; color: #0a3d0a; font-weight: bold;">Ateliers d'éveil & Activités manuelles</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -144,6 +144,39 @@ st.markdown("""
     .stPills [data-baseweb="tag"] { background-color: #e0f2f1 !important; color: #1b5e20 !important; border: 1px solid #80cbc4 !important; }
     .stPills [data-baseweb="tag"][aria-selected="true"] { background-color: #1b5e20 !important; color: white !important; border-color: #1b5e20 !important; }
     input:invalid, textarea:invalid, select:invalid { box-shadow: none !important; border-color: #ccc !important; }
+
+    /* ==========================================================================
+       OPTIMISATION MOBILE (téléphone) — n'affecte QUE les écrans <= 640px de large.
+       Au-delà de 640px (ordinateur/tablette), l'affichage reste strictement identique.
+       Streamlit empile déjà nativement les colonnes sous ce seuil dans ses versions
+       récentes ; les règles ci-dessous le garantissent quelle que soit la version
+       installée, et ajustent en plus la bannière, les onglets et la taille des
+       boutons pour un usage confortable au doigt.
+       ========================================================================== */
+    @media (max-width: 640px) {
+        /* Empilement garanti des colonnes : plusieurs colonnes serrées deviennent
+           illisibles sur un écran de téléphone (ex: liste des inscrits, filtres). */
+        div[data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 8px; }
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            width: 100% !important;
+            min-width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+        /* Bannière d'en-tête : réduite pour ne jamais déborder sur un petit écran */
+        .app-header { padding: 12px !important; }
+        .app-header-emoji { font-size: 2.1rem !important; margin-right: 12px !important; }
+        .app-header-title { font-size: 1.4rem !important; }
+        .app-header-subtitle { font-size: 0.82rem !important; }
+        /* Boutons pleine largeur une fois la colonne empilée (cible tactile plus grande) */
+        div[data-testid="column"] .stButton button { width: 100% !important; }
+        div[data-testid="column"] .stDownloadButton button { width: 100% !important; }
+        /* Onglets (Suivi & Récap, Administration) : défilement horizontal fluide
+           plutôt qu'un texte écrasé/tronqué si les libellés ne tiennent pas */
+        .stTabs [data-baseweb="tab-list"] { overflow-x: auto; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }
+        .stTabs [data-baseweb="tab"] { padding: 6px 12px; font-size: 0.82rem; white-space: nowrap; }
+        /* Tableaux larges (Statistiques, Places restantes) : défilement tactile fluide */
+        .rs-wrap { -webkit-overflow-scrolling: touch; }
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -649,6 +682,16 @@ def periode_stats_defaut():
         annee = today.year - 1
     return date(annee, 9, 1), date(annee + 1, 7, 15)
 
+def periode_places_restantes_defaut():
+    """Règle de période par défaut pour l'écran Places restantes, basée sur la date du jour :
+    du jour même au 31 juillet le plus proche dans le futur (cette année si le 31 juillet n'est
+    pas encore passé, sinon l'année suivante)."""
+    today = date.today()
+    fin_cette_annee = date(today.year, 7, 31)
+    if today <= fin_cette_annee:
+        return today, fin_cette_annee
+    return today, date(today.year + 1, 7, 31)
+
 def format_date_courte(iso_str):
     try:
         d = datetime.strptime(str(iso_str), '%Y-%m-%d')
@@ -1125,6 +1168,47 @@ def export_planning_ateliers_pdf_with_period(title, ateliers_data, cache_ins_dic
     _pdf_planning_body(pdf, ateliers_data, cache_ins_dict)
     return pdf.output(dest='S').encode('latin-1')
 
+# --- PLACES RESTANTES (regroupement par lieu, ateliers non complets) ---
+
+def export_places_restantes_pdf(title, lignes_par_lieu, date_debut, date_fin):
+    """PDF A4 portrait (format par défaut de FPDF) : un bloc par lieu, lignes triées par
+    places restantes décroissantes, date colorée selon le badge de l'atelier."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, normaliser_pdf_text(title), ln=True, align='C')
+    pdf.ln(2)
+    pdf.set_font("Arial", 'I', 11)
+    pdf.cell(0, 8, normaliser_pdf_text(f"Periode : du {format_date_fr_simple(str(date_debut))} au {format_date_fr_simple(str(date_fin))}"), ln=True, align='C')
+    pdf.ln(4)
+    pdf.set_text_color(0, 0, 0)
+
+    if not lignes_par_lieu:
+        pdf.set_font("Arial", size=11)
+        pdf.cell(0, 10, normaliser_pdf_text("Aucun atelier avec des places restantes sur cette periode / ces filtres."), ln=True)
+        return _pdf_output_bytes(pdf)
+
+    for lieu_nom in sorted(lignes_par_lieu.keys()):
+        lignes = sorted(lignes_par_lieu[lieu_nom], key=lambda a: a["_places_restantes"], reverse=True)
+        pdf.set_fill_color(27, 58, 92)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 9, normaliser_pdf_text(f"  {lieu_nom}"), ln=True, fill=True)
+        pdf.set_text_color(0, 0, 0)
+        for a in lignes:
+            date_fr = format_date_fr_simple(a['date_atelier'])
+            titre_at = a.get('titre') or "(sans titre)"
+            r, g, b = rgb_couleur_badge(get_couleur_atelier(a))
+            pdf.set_font("Arial", 'B', 10)
+            pdf.set_text_color(r, g, b)
+            pdf.cell(42, 7, normaliser_pdf_text(f"  {date_fr}"), border=0)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("Arial", size=10)
+            unite = "place restante" if a["_places_restantes"] == 1 else "places restantes"
+            pdf.cell(0, 7, normaliser_pdf_text(f"{titre_at}  -  {a['_places_restantes']} {unite}"), ln=True)
+        pdf.ln(3)
+    return _pdf_output_bytes(pdf)
+
 # --- Logique commune d'application de l'animateur (Animateur & Admin) ---
 def _appliquer_animateur_ui(at, total_occ, total_enfants_actuel, max_enf_at,
                              anim_id_at, anim_ins, nouvel_anim, nb_enf,
@@ -1225,6 +1309,51 @@ def confirm_unsubscribe_dialog(ins_id, nom_complet, atelier_info, user_admin="Ut
         supabase.table("inscriptions").delete().eq("id", ins_id).execute()
         invalider_cache_inscriptions()
         st.rerun()
+
+# --- DOUBLE VALIDATION À L'INSCRIPTION (module 📝 Inscriptions) ---
+def _corps_confirmation_inscription(mode, adherent_id, adherent_nom, atelier_id, atelier_info_display,
+                                     nb_enfants, at_info_log, user_principal, existing_id=None):
+    """Corps commun aux deux pop-up de confirmation (nouvelle inscription / modification) :
+    récapitulatif + 3 boutons. 'Modifier' et 'Annuler' referment tous les deux la pop-up sans rien
+    enregistrer, en laissant le formulaire tel quel (nom et nombre d'enfants déjà saisis conservés,
+    puisque Streamlit garde la valeur des champs entre deux affichages) : 'Modifier' pour ajuster
+    la saisie puis revalider, 'Annuler' pour renoncer à cette inscription/modification."""
+    verbe = "Modification de l'inscription de" if mode == "modification" else "Inscription de"
+    unite = "enfant" if nb_enfants == 1 else "enfants"
+    st.markdown(
+        f'<div style="background-color:#cfe9ff;border-left:4px solid #1b5e20;border-radius:6px;'
+        f'padding:10px 14px;font-size:0.98rem;">{verbe} <b>{adherent_nom}</b> à l\'atelier '
+        f'{atelier_info_display} pour <b>{nb_enfants} {unite}</b>.</div>',
+        unsafe_allow_html=True
+    )
+    st.write("")
+    c1, c2, c3 = st.columns(3)
+    label_confirmer = "✅ Confirmer la modification" if mode == "modification" else "✅ Confirmer l'inscription"
+    if c1.button(label_confirmer, type="primary", use_container_width=True):
+        if existing_id:
+            supabase.table("inscriptions").update({"nb_enfants": nb_enfants}).eq("id", existing_id).execute()
+            enregistrer_log(user_principal, "Modification", f"{adherent_nom} → {nb_enfants} enfants - {at_info_log}")
+        else:
+            supabase.table("inscriptions").insert({"adherent_id": adherent_id, "atelier_id": atelier_id, "nb_enfants": nb_enfants}).execute()
+            enregistrer_log(user_principal, "Inscription", f"{adherent_nom} inscrit (+{nb_enfants} enf.) - {at_info_log}")
+        invalider_cache_inscriptions()
+        st.rerun()
+    if c2.button("✏️ Modifier", use_container_width=True):
+        st.rerun()
+    if c3.button("❌ Annuler", use_container_width=True):
+        st.rerun()
+
+@st.dialog("✅ Confirmer l'inscription")
+def confirm_inscription_dialog(adherent_id, adherent_nom, atelier_id, atelier_info_display,
+                                nb_enfants, at_info_log, user_principal, existing_id=None):
+    _corps_confirmation_inscription("nouvelle", adherent_id, adherent_nom, atelier_id, atelier_info_display,
+                                     nb_enfants, at_info_log, user_principal, existing_id)
+
+@st.dialog("✏️ Confirmer la modification")
+def confirm_modification_inscription_dialog(adherent_id, adherent_nom, atelier_id, atelier_info_display,
+                                             nb_enfants, at_info_log, user_principal, existing_id):
+    _corps_confirmation_inscription("modification", adherent_id, adherent_nom, atelier_id, atelier_info_display,
+                                     nb_enfants, at_info_log, user_principal, existing_id)
 
 @st.dialog("🔑 Super Administration")
 def super_admin_dialog():
@@ -1562,7 +1691,9 @@ elif menu == "📝 Inscriptions":
                     # --- Date avec émoji coloré ---
                     emoji = get_weekday_emoji(at['date_atelier'])
                     titre_affiche = at['titre'] if at['titre'] else "(sans titre)"
-                    
+                    # Description de l'atelier utilisée dans les pop-up de confirmation d'inscription
+                    atelier_desc_html = f"<i>{titre_affiche}</i> du <b>{format_date_fr_complete(at['date_atelier'], gras=False)}</b> à <b>{at['lieu_nom']}</b> ({at['horaire_lib']})"
+
                     # Indicateur si l'utilisateur principal est déjà inscrit / est l'animateur de cet atelier
                     id_user_principal = dict_adh.get(user_principal)
                     est_inscrit = any(i['adherent_id'] == id_user_principal for i in ins_data) if id_user_principal else False
@@ -1583,8 +1714,11 @@ elif menu == "📝 Inscriptions":
                                 st.markdown(f'<span style="color:#e65100;font-weight:bold;">⭐ {n_a} <b>({anim_ins["nb_enfants"]} enf.)</b> <span style="background:#e65100;color:white;padding:1px 6px;border-radius:4px;font-size:0.78rem;">ANIMATEUR</span></span>', unsafe_allow_html=True)
 
                             # --- Affichage des autres inscrits (non animateurs) avec possibilité de modification/désinscription ---
+                            # L'AM actuellement sélectionnée dans la sidebar (user_principal) est affichée en
+                            # dernier dans la liste : cela rend visible que son inscription vient d'être prise
+                            # en compte, plutôt que de la voir apparaître en haut au milieu du tri alphabétique.
                             autres_ins = [i for i in ins_data if i['adherent_id'] != anim_id_at]
-                            autres_tries = sorted(autres_ins, key=lambda x: (x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
+                            autres_tries = sorted(autres_ins, key=lambda x: (x['adherent_id'] == id_user_principal, x['adherents']['nom'].upper(), x['adherents']['prenom'].upper()))
 
                             total_occ = sum([(1 + (i['nb_enfants'] if i['nb_enfants'] else 0)) for i in ins_data])
 
@@ -1602,10 +1736,14 @@ elif menu == "📝 Inscriptions":
                                     elif nouveau_total_enf > max_enf_at:
                                         st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé")
                                     else:
-                                        supabase.table("inscriptions").update({"nb_enfants": new_nb}).eq("id", i['id']).execute()
-                                        enregistrer_log(user_principal, "Modification", f"{n_f} → {new_nb} enfants - {at_info_log}")
-                                        invalider_cache_inscriptions()
-                                        st.rerun()
+                                        # Double validation demandée par l'utilisateur : pop-up de confirmation
+                                        # avant d'enregistrer la modification du nombre d'enfants.
+                                        confirm_modification_inscription_dialog(
+                                            adherent_id=i['adherent_id'], adherent_nom=n_f,
+                                            atelier_id=at['id'], atelier_info_display=atelier_desc_html,
+                                            nb_enfants=new_nb, at_info_log=at_info_log, user_principal=user_principal,
+                                            existing_id=i['id']
+                                        )
                                 if col_del.button("🗑️", key=f"del_{i['id']}"):
                                     confirm_unsubscribe_dialog(i['id'], n_f, at_info_log, user_principal)
 
@@ -1641,21 +1779,21 @@ elif menu == "📝 Inscriptions":
                                     elif nouveau_total_enf > max_enf_at:
                                         st.error(f"🚫 Le nombre maximum d'enfants ({max_enf_at}) serait dépassé")
                                     else:
-                                        if existing:
-                                            supabase.table("inscriptions").update({"nb_enfants": nb_e}).eq("id", existing['id']).execute()
-                                            enregistrer_log(user_principal, "Modification", f"{qui} → {nb_e} enfants - {at_info_log}")
-                                        else:
-                                            supabase.table("inscriptions").insert({"adherent_id": id_adh, "atelier_id": at['id'], "nb_enfants": nb_e}).execute()
-                                            enregistrer_log(user_principal, "Inscription", f"{qui} inscrit (+{nb_e} enf.) - {at_info_log}")
-                                        invalider_cache_inscriptions()
-                                        st.rerun()
+                                        # Double validation demandée par l'utilisateur : pop-up de confirmation
+                                        # avant d'enregistrer l'inscription.
+                                        confirm_inscription_dialog(
+                                            adherent_id=id_adh, adherent_nom=qui,
+                                            atelier_id=at['id'], atelier_info_display=atelier_desc_html,
+                                            nb_enfants=nb_e, at_info_log=at_info_log, user_principal=user_principal,
+                                            existing_id=existing['id'] if existing else None
+                                        )
                                             
 # ==========================================
 # SECTION 📊 SUIVI & RÉCAP
 # ==========================================
 elif menu == "📊 Suivi & Récap":
     st.header("🔎 Consultation")
-    t1, t2 = st.tabs(["👤 Par Assistante Maternelle", "📅 Par Atelier"])
+    t1, t2, t3 = st.tabs(["👤 Par AM", "📅 Par Atelier", "🪑 Places restantes"])
 
     with t1:
         data_triee = []
@@ -1776,6 +1914,59 @@ elif menu == "📊 Suivi & Récap":
                     st.markdown('<hr class="separateur-atelier">', unsafe_allow_html=True)
         else:
             st.info("Aucun atelier trouvé sur cette période.")
+
+    with t3:
+        st.markdown("Ateliers **non complets**, regroupés par lieu, triés par nombre de places restantes décroissant.")
+
+        noms_lieux_dispo = sorted([l['nom'] for l in lieux_actifs])
+        cf1, cf2 = st.columns(2)
+        filtre_lieux_pr = cf1.multiselect("Filtrer par lieu :", noms_lieux_dispo, key="pr_filtre_lieux")
+        filtre_couleurs_pr = cf2.multiselect("Filtrer par couleur d'atelier :", COULEURS_BADGE_LIST, key="pr_filtre_couleurs")
+
+        d_def_debut_pr, d_def_fin_pr = periode_places_restantes_defaut()
+        cd1, cd2 = st.columns(2)
+        d_s_pr = cd1.date_input("Du", d_def_debut_pr, key="pr_d1", format="DD/MM/YYYY")
+        d_e_pr = cd2.date_input("Au", d_def_fin_pr, key="pr_d2", format="DD/MM/YYYY")
+
+        ateliers_bruts_pr = get_ateliers_periode(str(d_s_pr), str(d_e_pr), "Actifs")
+        ateliers_pr = enrichir_ateliers([dict(a) for a in ateliers_bruts_pr], lieux_dict_global, horaires_dict_global)
+
+        if filtre_lieux_pr:
+            ateliers_pr = [a for a in ateliers_pr if a['lieu_nom'] in filtre_lieux_pr]
+        if filtre_couleurs_pr:
+            ateliers_pr = [a for a in ateliers_pr if get_couleur_atelier(a) in filtre_couleurs_pr]
+
+        at_ids_pr = tuple(a['id'] for a in ateliers_pr)
+        toutes_ins_pr = get_toutes_inscriptions_ateliers(at_ids_pr)
+        cache_ins_pr = construire_cache_ins(toutes_ins_pr)
+
+        # Regroupement par lieu, en ne conservant que les ateliers avec au moins 1 place enfant restante
+        lignes_par_lieu_pr = {}
+        for a in ateliers_pr:
+            ins_at_pr = cache_ins_pr.get(a['id'], [])
+            total_enfants_pr = sum(p['nb_enfants'] for p in ins_at_pr)
+            max_enf_at_pr = get_max_enfants_atelier(a, MAX_ENFANTS)
+            places_restantes_pr = max(max_enf_at_pr - total_enfants_pr, 0)
+            if places_restantes_pr <= 0:
+                continue
+            a_avec_places = dict(a)
+            a_avec_places["_places_restantes"] = places_restantes_pr
+            lignes_par_lieu_pr.setdefault(a['lieu_nom'], []).append(a_avec_places)
+
+        pdf_places_restantes = export_places_restantes_pdf("Places restantes", lignes_par_lieu_pr, str(d_s_pr), str(d_e_pr))
+        st.download_button("📥 PDF Places restantes", data=pdf_places_restantes, file_name="places_restantes.pdf", key="exp_pr_pdf")
+
+        if not lignes_par_lieu_pr:
+            st.info("Aucun atelier avec des places restantes sur cette période / ces filtres.")
+        else:
+            for lieu_nom_pr in sorted(lignes_par_lieu_pr.keys()):
+                st.markdown(f"<div style='background-color:#1b3a5c;color:white;font-weight:700;padding:7px 14px;border-radius:8px;margin:16px 0 8px 0;'>{lieu_nom_pr}</div>", unsafe_allow_html=True)
+                lignes_pr = sorted(lignes_par_lieu_pr[lieu_nom_pr], key=lambda a: a["_places_restantes"], reverse=True)
+                for a in lignes_pr:
+                    c_at_pr = hex_couleur_badge(get_couleur_atelier(a))
+                    date_html_pr = f"<span style='color:{c_at_pr};font-weight:800;'>{format_date_fr_complete(a['date_atelier'], gras=False)}</span>"
+                    titre_affiche_pr = a['titre'] if a['titre'] else "(sans titre)"
+                    st.markdown(f"{date_html_pr} — {titre_affiche_pr} <span class='compteur-badge'>👶 {a['_places_restantes']} pl. restantes</span>", unsafe_allow_html=True)
 
 
 # ==========================================
